@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, documents, InsertDocument, Document, agentOutputs, InsertAgentOutput, AgentOutput } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,62 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Document queries
+export async function createDocument(doc: InsertDocument): Promise<Document> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(documents).values(doc);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(documents).where(eq(documents.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getDocumentById(id: number): Promise<Document | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getUserDocuments(userId: number): Promise<Document[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(documents).where(eq(documents.userId, userId)).orderBy(desc(documents.createdAt));
+}
+
+export async function updateDocumentStatus(id: number, status: Document['status'], summary?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updateData: Partial<Document> = { status };
+  if (summary !== undefined) {
+    updateData.summary = summary;
+  }
+
+  await db.update(documents).set(updateData).where(eq(documents.id, id));
+}
+
+// Agent output queries
+export async function createAgentOutput(output: InsertAgentOutput): Promise<AgentOutput> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(agentOutputs).values(output);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(agentOutputs).where(eq(agentOutputs.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getAgentOutputByDocumentId(documentId: number): Promise<AgentOutput | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(agentOutputs).where(eq(agentOutputs.documentId, documentId)).limit(1);
+  return result[0];
+}
+
