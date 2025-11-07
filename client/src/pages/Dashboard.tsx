@@ -266,7 +266,7 @@ export default function Dashboard() {
         {/* Quick Access */}
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-white mb-6 font-mono">QUICK ACCESS</h2>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <Link href="/pricing">
               <Card className="bg-slate-900/50 border-slate-800 hover:border-blue-500/50 transition-colors cursor-pointer">
                 <CardContent className="p-6 flex items-center justify-between">
@@ -286,6 +286,17 @@ export default function Dashboard() {
                     <p className="text-slate-400 text-sm">Manage account and preferences</p>
                   </div>
                   <SettingsIcon className="w-8 h-8 text-blue-500" />
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/reports">
+              <Card className="bg-slate-900/50 border-slate-800 hover:border-blue-500/50 transition-colors cursor-pointer">
+                <CardContent className="p-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-white font-mono font-bold mb-1">GENERATE REPORTS</h3>
+                    <p className="text-slate-400 text-sm">Create shareable evidence reports</p>
+                  </div>
+                  <Brain className="w-8 h-8 text-blue-500" />
                 </CardContent>
               </Card>
             </Link>

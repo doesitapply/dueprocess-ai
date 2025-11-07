@@ -196,3 +196,23 @@
 - [ ] IP whitelist management
 - [ ] Encryption settings
 
+
+
+## Report Generation System
+- [x] Report generation backend (PDF, DOCX, HTML export)
+- [x] Report templates (Legal Brief, Investigation Report, Media Packet, Executive Summary)
+- [x] AI-generated executive summaries
+- [x] Custom branding (logo, colors, styling)
+- [x] Evidence attachments in reports
+- [x] Shareable report links (public/private)
+- [x] Email distribution system (UI ready)
+- [x] Report preview interface
+- [x] Report history and management
+- [x] Export format selection (PDF, DOCX, HTML, JSON)
+- [x] Reports page with generation UI
+- [x] Dashboard link to Reports
+- [ ] Analytics visualization in reports (charts, graphs, timelines)
+- [ ] Report scheduling (auto-generate on intervals)
+- [ ] Collaborative report editing
+- [ ] Report access analytics
+

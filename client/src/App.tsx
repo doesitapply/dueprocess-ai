@@ -16,6 +16,7 @@ import LegalArsenal from "./pages/sectors/LegalArsenal";
 import EvidenceLab from "./pages/sectors/EvidenceLab";
 import OffensiveOps from "./pages/sectors/OffensiveOps";
 import IntegrationsHub from "./pages/sectors/IntegrationsHub";
+import Reports from "./pages/Reports";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path={"/pricing"} component={Pricing} />
       <Route path={"/payments"} component={Payments} />
       <Route path={"/settings"} component={Settings} />
+      <Route path={"/reports"} component={Reports} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/process/:id"} component={ProcessDocument} />
       <Route path={"/sector/tactical"} component={TacticalOps} />

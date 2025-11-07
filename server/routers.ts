@@ -19,11 +19,13 @@ import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 import { getAgentById } from "./agentConfig";
 import { fileProcessingRouter } from "./fileProcessing";
+import { reportRouter } from "./reportGenerator";
 
 export const appRouter = router({
   system: systemRouter,
   stripe: stripeRouter,
   fileProcessing: fileProcessingRouter,
+  reports: reportRouter,
 
   agents: router({
     process: protectedProcedure
