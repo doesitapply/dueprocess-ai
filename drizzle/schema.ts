@@ -173,3 +173,81 @@ export const agentReasoning = mysqlTable("agent_reasoning", {
 export type AgentReasoning = typeof agentReasoning.$inferSelect;
 export type InsertAgentReasoning = typeof agentReasoning.$inferInsert;
 
+/**
+ * Integration providers (Google Drive, Slack, etc.)
+ */
+export const integrationProviders = mysqlTable("integration_providers", {
+  id: int("id").autoincrement().primaryKey(),
+  providerId: varchar("providerId", { length: 50 }).notNull().unique(), // 'google-drive', 'slack', etc.
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  category: mysqlEnum("category", ["storage", "communication", "automation", "legal", "payment"]).notNull(),
+  authType: mysqlEnum("authType", ["oauth2", "api_key", "webhook"]).notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type IntegrationProvider = typeof integrationProviders.$inferSelect;
+export type InsertIntegrationProvider = typeof integrationProviders.$inferInsert;
+
+/**
+ * User connections to integration providers
+ */
+export const integrationConnections = mysqlTable("integration_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  providerId: varchar("providerId", { length: 50 }).notNull(),
+  accessToken: text("accessToken"), // Encrypted OAuth token
+  refreshToken: text("refreshToken"), // Encrypted refresh token
+  tokenExpiry: timestamp("tokenExpiry"),
+  apiKey: text("apiKey"), // For API key auth
+  webhookUrl: text("webhookUrl"),
+  webhookSecret: text("webhookSecret"),
+  settings: text("settings"), // JSON config
+  status: mysqlEnum("status", ["connected", "disconnected", "error"]).default("connected").notNull(),
+  lastSync: timestamp("lastSync"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type InsertIntegrationConnection = typeof integrationConnections.$inferInsert;
+
+/**
+ * Event bus for integration events
+ */
+export const integrationEvents = mysqlTable("integration_events", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  eventType: varchar("eventType", { length: 100 }).notNull(), // 'export.ready', 'citation.inserted', etc.
+  payload: text("payload").notNull(), // JSON event data
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  retryCount: int("retryCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  processedAt: timestamp("processedAt"),
+});
+
+export type IntegrationEvent = typeof integrationEvents.$inferSelect;
+export type InsertIntegrationEvent = typeof integrationEvents.$inferInsert;
+
+/**
+ * Job queue for async integration tasks
+ */
+export const integrationJobs = mysqlTable("integration_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  connectionId: int("connectionId").notNull(),
+  jobType: varchar("jobType", { length: 100 }).notNull(), // 'sync_file', 'send_notification', etc.
+  payload: text("payload").notNull(), // JSON job data
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  retryCount: int("retryCount").default(0).notNull(),
+  maxRetries: int("maxRetries").default(3).notNull(),
+  error: text("error"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+});
+
+export type IntegrationJob = typeof integrationJobs.$inferSelect;
+export type InsertIntegrationJob = typeof integrationJobs.$inferInsert;
+

@@ -21,6 +21,7 @@ import { getAgentById } from "./agentConfig";
 import { fileProcessingRouter } from "./fileProcessing";
 import { reportRouter } from "./reportGenerator";
 import { uploadRouter } from "./uploadRouter";
+import { integrationsRouter } from "./integrationsRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -28,6 +29,7 @@ export const appRouter = router({
   fileProcessing: fileProcessingRouter,
   reports: reportRouter,
   upload: uploadRouter,
+  integrations: integrationsRouter,
 
   agents: router({
     process: protectedProcedure

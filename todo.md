@@ -300,3 +300,63 @@
 - [ ] Search by meaning, not just keywords
 - [ ] Relevant document suggestions
 
+
+
+
+## Tier 0 MVP Integrations
+- [ ] Provider SDK architecture design
+- [ ] Database schema for integrations (providers, connections, events, jobs)
+- [ ] Event bus system (export.ready, citation.inserted, deadline.added, etc.)
+- [ ] Job queue with retries and backoff
+- [ ] Secrets vault for OAuth tokens
+
+### CourtListener + RECAP Integration
+- [ ] CourtListener API client
+- [ ] Case law search endpoint
+- [ ] Citation insertion with URL and holding
+- [ ] RECAP PDF import to Exhibits
+- [ ] Prior orders search and attach
+
+### Google Drive Integration
+- [ ] OAuth authentication flow
+- [ ] Two-way file sync
+- [ ] Exhibit folder monitoring
+- [ ] Export to Drive
+- [ ] Auto-index and label PDFs
+
+### OneDrive Integration
+- [ ] Microsoft Graph OAuth
+- [ ] Two-way file sync
+- [ ] Exhibit sync with de-duplication
+- [ ] Export to OneDrive
+
+### SendGrid Email Integration
+- [ ] SendGrid API setup
+- [ ] Export ready email with signed link
+- [ ] Rule 11 checklist reminder
+- [ ] Teach Mode digest (optional)
+- [ ] Unsubscribe handling
+
+### Slack Integration
+- [ ] Slack OAuth and bot setup
+- [ ] Matter-specific channel notifications
+- [ ] Export ready messages
+- [ ] Citation verification alerts
+- [ ] Hearing reminders
+- [ ] Retry on failure
+
+### Zapier Webhooks
+- [ ] Webhook endpoint creation
+- [ ] Event payload schemas
+- [ ] Idempotent delivery
+- [ ] Signature verification
+- [ ] Trigger types (export.ready, deadline.added, hearing.upcoming)
+
+### Integrations Hub UI
+- [ ] Provider connection management
+- [ ] OAuth flow UI
+- [ ] Integration health dashboard
+- [ ] Reconnect UI for failed connections
+- [ ] Event log viewer
+- [ ] Job queue status
+
