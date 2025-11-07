@@ -36,3 +36,17 @@
 - [x] Delete account and all data
 - [x] Account information display
 
+
+
+## Landing Page Redesign - Corruption-Exposing Aesthetic
+- [x] 3D animated background with network/globe visualization
+- [x] Dark, ominous color scheme (reds, blacks, electric blues)
+- [x] Glitch effects and matrix-style animations
+- [x] Pulsing heat map visual elements
+- [x] Powerful messaging for whistleblowers
+- [x] Professional yet dangerous design
+- [x] Live-looking data visualizations
+- [x] Transparency and accountability themes
+- [x] Dark humor and satirical copy
+- [x] Jester GPT persona with law degree vibes
+
