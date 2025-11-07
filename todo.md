@@ -91,3 +91,31 @@
 - [x] Export hub for other platforms
 - [x] Data sync center
 
+
+
+## Complete Visual Redesign - Unique Aesthetics Per Sector
+- [x] Tactical Ops - War room aesthetic (red alerts, tactical overlays, threat indicators)
+- [x] Intel Center - Research lab vibes (blue/cyan, holographic displays, data streams)
+- [x] Legal Arsenal - Weapon vault aesthetic (purple/violet, glowing ammunition metaphors)
+- [x] Dashboard with clear sector navigation buttons
+- [ ] Evidence Lab - Forensic lab (green matrix code, evidence scanners, analysis grids)
+- [ ] Offensive Ops - Launch control (orange/yellow, countdown timers, missile silo vibes)
+- [ ] Integrations Hub - Cyberpunk network (cyan circuits, data flow animations)
+- [ ] Unique color palettes for each sector
+- [ ] Custom animations per sector theme
+- [ ] Themed UI elements and icons
+- [ ] Sector-specific visual effects
+- [ ] Different background patterns/animations
+
+## Intel Center Enhancements
+- [ ] Real-time legal news feed integration
+- [ ] Case law search engine (Justia, CourtListener, Google Scholar)
+- [ ] Advanced search filters (jurisdiction, date, court level, topic)
+- [ ] Saved searches functionality
+- [ ] Search history tracking
+- [ ] Citation formatter (Bluebook style)
+- [ ] Database schema for saved searches
+- [ ] News feed database and caching
+- [ ] Search results pagination
+- [ ] Export search results to PDF/CSV
+

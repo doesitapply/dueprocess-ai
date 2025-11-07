@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, BookOpen, Scale, FileText, Loader2, Sparkles, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, BookOpen, Scale, FileText, Loader2, Sparkles, ExternalLink, Search, Database, Newspaper } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -13,7 +15,6 @@ const INTEL_AGENTS = [
     name: "Canon Hunter",
     description: "Digs through judicial ethics codes, lawyer professional conduct rules, and disciplinary standards",
     icon: <BookOpen className="w-6 h-6" />,
-    color: "blue",
     tagline: "They wrote the rules. We memorized them.",
     sources: ["ABA Model Code", "State Bar Rules", "Judicial Conduct Codes"]
   },
@@ -22,7 +23,6 @@ const INTEL_AGENTS = [
     name: "Precedent Miner",
     description: "Searches Justia, Westlaw, and CourtListener for relevant case law and precedents",
     icon: <Scale className="w-6 h-6" />,
-    color: "indigo",
     tagline: "Stare decisis. Latin for 'your receipts are permanent.'",
     sources: ["Justia", "CourtListener", "Google Scholar"]
   },
@@ -31,16 +31,83 @@ const INTEL_AGENTS = [
     name: "Statute Scanner",
     description: "Federal and state statutory law specialist",
     icon: <FileText className="w-6 h-6" />,
-    color: "violet",
     tagline: "Congress wrote it. We weaponized it.",
     sources: ["Cornell LII", "U.S. Code", "State Statutes"]
   },
+];
+
+// Mock legal news data
+const MOCK_NEWS = [
+  { title: "Supreme Court Ruling on Qualified Immunity Expands Civil Rights Protections", source: "SCOTUSblog", time: "2h ago", url: "#" },
+  { title: "Federal Court Rejects Younger Abstention in Civil Rights Case", source: "Law360", time: "5h ago", url: "#" },
+  { title: "New Brady Violation Standards Set by 9th Circuit", source: "ABA Journal", time: "1d ago", url: "#" },
+  { title: "Prosecutorial Misconduct Leads to $10M Settlement", source: "Reuters Legal", time: "2d ago", url: "#" },
 ];
 
 export default function IntelCenter() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Holographic data stream animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const dataStreams: { x: number; y: number; speed: number; opacity: number }[] = [];
+    
+    for (let i = 0; i < 30; i++) {
+      dataStreams.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        speed: 0.5 + Math.random() * 1.5,
+        opacity: 0.3 + Math.random() * 0.4
+      });
+    }
+
+    const animate = () => {
+      ctx.fillStyle = "rgba(0, 10, 20, 0.1)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      dataStreams.forEach((stream) => {
+        // Draw data stream line
+        ctx.strokeStyle = `rgba(6, 182, 212, ${stream.opacity})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(stream.x, stream.y);
+        ctx.lineTo(stream.x, stream.y + 50);
+        ctx.stroke();
+
+        // Draw data points
+        for (let i = 0; i < 5; i++) {
+          const pointY = stream.y + i * 12;
+          ctx.fillStyle = `rgba(6, 182, 212, ${stream.opacity * 0.8})`;
+          ctx.fillRect(stream.x - 1, pointY, 2, 6);
+        }
+
+        stream.y += stream.speed;
+        
+        if (stream.y > canvas.height) {
+          stream.y = -50;
+          stream.x = Math.random() * canvas.width;
+        }
+      });
+
+      requestAnimationFrame(animate);
+    };
+
+    const animationId = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationId);
+  }, []);
 
   const processAgent = trpc.agents.process.useMutation({
     onSuccess: (data) => {
@@ -67,146 +134,222 @@ export default function IntelCenter() {
   const selectedAgentData = INTEL_AGENTS.find(a => a.id === selectedAgent);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950/20 to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 relative overflow-hidden">
+      {/* Holographic data streams background */}
+      <canvas ref={canvasRef} className="absolute inset-0 opacity-40" />
+
+      {/* Grid overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-5"
+        style={{
+          backgroundImage: "linear-gradient(cyan 1px, transparent 1px), linear-gradient(90deg, cyan 1px, transparent 1px)",
+          backgroundSize: "50px 50px"
+        }}
+      />
+
       {/* Header */}
-      <header className="border-b border-blue-900/20 bg-slate-950/50 backdrop-blur-sm sticky top-0 z-20">
+      <header className="border-b border-cyan-900/30 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-20 relative">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/dashboard">
-            <Button variant="ghost" className="text-white gap-2">
+            <Button variant="ghost" className="text-cyan-400 hover:text-cyan-300 gap-2">
               <ArrowLeft className="w-4 h-4" />
-              Back to Command Center
+              EXIT RESEARCH LAB
             </Button>
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white font-mono">INTEL CENTER</h1>
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <Database className="w-5 h-5 text-cyan-500" />
+            <h1 className="text-xl font-bold text-cyan-500 font-mono tracking-wider">INTELLIGENCE CENTER</h1>
+            <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Sector Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-white mb-2 font-mono">INTELLIGENCE CENTER</h1>
-          <p className="text-slate-400">Case law research, statute scanning, ethics code hunting</p>
-        </div>
+      <main className="container mx-auto px-4 py-8 relative z-10">
+        {/* Tabs for different intel modes */}
+        <Tabs defaultValue="agents" className="space-y-6">
+          <TabsList className="bg-slate-900/50 border border-cyan-900/30">
+            <TabsTrigger value="agents" className="data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400">
+              <BookOpen className="w-4 h-4 mr-2" />
+              Research Agents
+            </TabsTrigger>
+            <TabsTrigger value="search" className="data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400">
+              <Search className="w-4 h-4 mr-2" />
+              Case Law Search
+            </TabsTrigger>
+            <TabsTrigger value="news" className="data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400">
+              <Newspaper className="w-4 h-4 mr-2" />
+              Legal News Feed
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Agent Selection */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          {INTEL_AGENTS.map((agent) => (
-            <Card
-              key={agent.id}
-              className={`cursor-pointer transition-all ${
-                selectedAgent === agent.id
-                  ? `bg-${agent.color}-900/30 border-${agent.color}-500/50 shadow-lg shadow-${agent.color}-500/20`
-                  : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
-              }`}
-              onClick={() => {
-                setSelectedAgent(agent.id);
-                setResult(null);
-              }}
-            >
+          {/* Research Agents Tab */}
+          <TabsContent value="agents" className="space-y-6">
+            <div className="text-center mb-8">
+              <h1 className="text-4xl font-bold text-cyan-400 mb-2 font-mono">RESEARCH LABORATORY</h1>
+              <p className="text-cyan-400/70 font-mono">Case Law • Statutes • Ethics Codes</p>
+            </div>
+
+            {/* Agent Selection */}
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              {INTEL_AGENTS.map((agent) => (
+                <Card
+                  key={agent.id}
+                  className={`cursor-pointer transition-all ${
+                    selectedAgent === agent.id
+                      ? "bg-cyan-900/30 border-cyan-500/50 shadow-lg shadow-cyan-500/20"
+                      : "bg-slate-900/50 border-cyan-900/20 hover:border-cyan-700/50"
+                  }`}
+                  onClick={() => {
+                    setSelectedAgent(agent.id);
+                    setResult(null);
+                  }}
+                >
+                  <CardHeader>
+                    <div className="w-12 h-12 rounded-lg bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 mb-3">
+                      {agent.icon}
+                    </div>
+                    <CardTitle className="text-cyan-400 font-mono">{agent.name}</CardTitle>
+                    <CardDescription className="text-cyan-400/60">{agent.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-cyan-500/80 italic mb-3 font-mono">"{agent.tagline}"</p>
+                    <div className="space-y-1">
+                      <p className="text-xs text-cyan-600 font-semibold font-mono">DATA SOURCES:</p>
+                      {agent.sources.map((source, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs text-cyan-500/70">
+                          <div className="w-1 h-1 rounded-full bg-cyan-500" />
+                          <span className="font-mono">{source}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Input Section */}
+            {selectedAgent && (
+              <div className="space-y-6">
+                <Card className="bg-slate-900/50 border-cyan-900/30">
+                  <CardHeader>
+                    <CardTitle className="text-cyan-400 flex items-center gap-2 font-mono">
+                      <Sparkles className="w-5 h-5 text-cyan-500" />
+                      {selectedAgentData?.name} Interface
+                    </CardTitle>
+                    <CardDescription className="text-cyan-400/60">
+                      Describe your legal issue or provide relevant facts for research
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      placeholder="Enter your legal question, facts, or area of law to research..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      className="min-h-[200px] bg-slate-950/50 border-cyan-900/50 text-cyan-400 font-mono text-sm placeholder:text-cyan-900"
+                    />
+                    <Button
+                      onClick={handleProcess}
+                      disabled={processAgent.isPending || !input.trim()}
+                      className="w-full bg-cyan-600 hover:bg-cyan-700 font-mono"
+                    >
+                      {processAgent.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          RESEARCHING...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4 mr-2" />
+                          INITIATE RESEARCH
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Results Section */}
+                {result && (
+                  <Card className="bg-slate-900/50 border-green-900/30">
+                    <CardHeader>
+                      <CardTitle className="text-green-400 flex items-center gap-2 font-mono">
+                        <Sparkles className="w-5 h-5 text-green-500" />
+                        RESEARCH RESULTS
+                      </CardTitle>
+                      <CardDescription className="text-green-400/60">
+                        Citations, sources, and legal analysis
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="prose prose-invert max-w-none">
+                        <pre className="whitespace-pre-wrap text-sm bg-slate-950/50 p-4 rounded-lg border border-green-900/30 text-green-400 font-mono">
+                          {result}
+                        </pre>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Case Law Search Tab */}
+          <TabsContent value="search" className="space-y-6">
+            <Card className="bg-slate-900/50 border-cyan-900/30">
               <CardHeader>
-                <div className={`w-12 h-12 rounded-lg bg-${agent.color}-500/20 flex items-center justify-center text-${agent.color}-400 mb-3`}>
-                  {agent.icon}
+                <CardTitle className="text-cyan-400 font-mono">CASE LAW DATABASE</CardTitle>
+                <CardDescription className="text-cyan-400/60">
+                  Search across Justia, CourtListener, and Google Scholar
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search case law, statutes, or legal topics..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-slate-950/50 border-cyan-900/50 text-cyan-400 font-mono placeholder:text-cyan-900"
+                  />
+                  <Button className="bg-cyan-600 hover:bg-cyan-700">
+                    <Search className="w-4 h-4" />
+                  </Button>
                 </div>
-                <CardTitle className="text-white">{agent.name}</CardTitle>
-                <CardDescription className="text-slate-400">{agent.description}</CardDescription>
+                <div className="text-center text-cyan-400/50 font-mono text-sm py-8">
+                  Enter search query to access case law database
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Legal News Feed Tab */}
+          <TabsContent value="news" className="space-y-6">
+            <Card className="bg-slate-900/50 border-cyan-900/30">
+              <CardHeader>
+                <CardTitle className="text-cyan-400 font-mono">REAL-TIME LEGAL NEWS</CardTitle>
+                <CardDescription className="text-cyan-400/60">
+                  Latest updates from legal news sources
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-slate-500 italic mb-3">"{agent.tagline}"</p>
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-600 font-semibold">Sources:</p>
-                  {agent.sources.map((source, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-slate-500">
-                      <ExternalLink className="w-3 h-3" />
-                      <span>{source}</span>
+                <div className="space-y-3">
+                  {MOCK_NEWS.map((news, idx) => (
+                    <div key={idx} className="p-4 bg-slate-950/50 border border-cyan-900/30 rounded hover:border-cyan-700/50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h3 className="text-cyan-400 font-mono text-sm mb-1">{news.title}</h3>
+                          <div className="flex items-center gap-3 text-xs text-cyan-500/60 font-mono">
+                            <span>{news.source}</span>
+                            <span>•</span>
+                            <span>{news.time}</span>
+                          </div>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-cyan-500/50" />
+                      </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {/* Input Section */}
-        {selectedAgent && (
-          <div className="space-y-6">
-            <Card className="bg-slate-900/50 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Sparkles className={`w-5 h-5 text-${selectedAgentData?.color}-400`} />
-                  {selectedAgentData?.name} Interface
-                </CardTitle>
-                <CardDescription>
-                  Describe your legal issue or provide relevant facts for research
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="Enter your legal question, facts, or area of law to research..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  className="min-h-[200px] bg-slate-950/50 border-slate-700 text-white font-mono text-sm"
-                />
-                <Button
-                  onClick={handleProcess}
-                  disabled={processAgent.isPending || !input.trim()}
-                  className={`w-full bg-${selectedAgentData?.color}-600 hover:bg-${selectedAgentData?.color}-700`}
-                >
-                  {processAgent.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Researching...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Start Research
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Results Section */}
-            {result && (
-              <Card className="bg-slate-900/50 border-green-900/30">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-green-400" />
-                    Research Results
-                  </CardTitle>
-                  <CardDescription>
-                    Citations, sources, and legal analysis
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose prose-invert max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm bg-slate-950/50 p-4 rounded-lg border border-slate-800 text-slate-300 font-mono">
-                      {result}
-                    </pre>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-
-        {/* Help Section */}
-        {!selectedAgent && (
-          <Card className="bg-blue-900/10 border-blue-900/30">
-            <CardHeader>
-              <CardTitle className="text-white">How to Use Intel Center</CardTitle>
-            </CardHeader>
-            <CardContent className="text-slate-400 space-y-2">
-              <p>1. Select a research agent based on your needs</p>
-              <p>2. Describe your legal issue or provide relevant facts</p>
-              <p>3. The agent will search authoritative sources and provide citations</p>
-              <p>4. All results include full citations, sources, and legal reasoning</p>
-            </CardContent>
-          </Card>
-        )}
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

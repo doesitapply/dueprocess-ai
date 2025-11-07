@@ -2,8 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Scale, Gavel, Users, TrendingUp, Loader2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Scale, Gavel, Shield, TrendingUp, Loader2, Sparkles, Zap } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -11,38 +11,34 @@ const ARSENAL_AGENTS = [
   {
     id: "constitutional_analyst",
     name: "Constitutional Analyst",
-    description: "Identifies violations of constitutional rights (1st, 4th, 5th, 6th, 14th Amendments)",
+    description: "1st, 4th, 5th, 6th, 14th Amendment violations and constitutional law expert",
     icon: <Scale className="w-6 h-6" />,
-    color: "purple",
-    tagline: "The Constitution is not a suggestion. It's a receipt.",
-    focus: ["1st Amendment", "4th Amendment", "5th Amendment", "6th Amendment", "14th Amendment"]
+    tagline: "The Constitution is not a suggestion. It's ammunition.",
+    ammo: "CONSTITUTIONAL"
   },
   {
     id: "criminal_law_specialist",
     name: "Criminal Law Specialist",
-    description: "Analyzes Brady violations, prosecutorial misconduct, and criminal procedure violations",
+    description: "Brady violations, prosecutorial misconduct, and criminal procedure expert",
     icon: <Gavel className="w-6 h-6" />,
-    color: "pink",
-    tagline: "Brady violations. Because hiding evidence is a felony, not a strategy.",
-    focus: ["Brady Violations", "Giglio", "Napue", "Fabrication", "Malicious Prosecution"]
+    tagline: "Brady said disclose. We say destroy.",
+    ammo: "CRIMINAL"
   },
   {
     id: "civil_rights_expert",
     name: "Civil Rights Expert",
     description: "§1983 claims, qualified immunity piercing, and civil rights litigation",
-    icon: <Users className="w-6 h-6" />,
-    color: "fuchsia",
-    tagline: "Qualified immunity. Qualified bullshit.",
-    focus: ["§1983 Claims", "Qualified Immunity", "Deliberate Indifference", "Conspiracy"]
+    icon: <Shield className="w-6 h-6" />,
+    tagline: "Civil rights aren't civil. They're weapons.",
+    ammo: "CIVIL RIGHTS"
   },
   {
     id: "appellate_strategist",
     name: "Appellate Strategist",
-    description: "Appeals, writs, and extraordinary relief specialist",
+    description: "Appeals, writs, extraordinary relief, and appellate procedure",
     icon: <TrendingUp className="w-6 h-6" />,
-    color: "violet",
-    tagline: "When the trial court fails, we go higher. Much higher.",
-    focus: ["Mandamus", "Prohibition", "Habeas Corpus", "Certiorari"]
+    tagline: "The trial court failed. The appellate court won't.",
+    ammo: "APPELLATE"
   },
 ];
 
@@ -50,11 +46,80 @@ export default function LegalArsenal() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Weapon vault energy field animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles: { x: number; y: number; vx: number; vy: number; size: number }[] = [];
+    
+    for (let i = 0; i < 50; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        size: 1 + Math.random() * 2
+      });
+    }
+
+    const animate = () => {
+      ctx.fillStyle = "rgba(10, 0, 20, 0.1)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach((particle, i) => {
+        // Draw particle
+        ctx.fillStyle = `rgba(168, 85, 247, ${0.6})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw connections to nearby particles
+        particles.forEach((other, j) => {
+          if (i === j) return;
+          const dx = other.x - particle.x;
+          const dy = other.y - particle.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < 150) {
+            ctx.strokeStyle = `rgba(168, 85, 247, ${0.2 * (1 - dist / 150)})`;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(particle.x, particle.y);
+            ctx.lineTo(other.x, other.y);
+            ctx.stroke();
+          }
+        });
+
+        // Update position
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+
+        // Bounce off edges
+        if (particle.x < 0 || particle.x > canvas.width) particle.vx *= -1;
+        if (particle.y < 0 || particle.y > canvas.height) particle.vy *= -1;
+      });
+
+      requestAnimationFrame(animate);
+    };
+
+    const animationId = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationId);
+  }, []);
 
   const processAgent = trpc.agents.process.useMutation({
     onSuccess: (data) => {
       setResult(typeof data.output === 'string' ? data.output : JSON.stringify(data.output));
-      toast.success("Analysis complete!");
+      toast.success("Legal weapon deployed!");
     },
     onError: (error) => {
       toast.error(error.message);
@@ -63,7 +128,7 @@ export default function LegalArsenal() {
 
   const handleProcess = () => {
     if (!selectedAgent || !input.trim()) {
-      toast.error("Please select an agent and provide input");
+      toast.error("Please select a weapon and provide target");
       return;
     }
 
@@ -76,39 +141,61 @@ export default function LegalArsenal() {
   const selectedAgentData = ARSENAL_AGENTS.find(a => a.id === selectedAgent);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/20 to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-slate-950 to-violet-950 relative overflow-hidden">
+      {/* Energy field background */}
+      <canvas ref={canvasRef} className="absolute inset-0 opacity-30" />
+
+      {/* Hexagon pattern overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-5"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l25.98 15v30L30 60 4.02 45V15z' fill='none' stroke='%23a855f7' stroke-width='1'/%3E%3C/svg%3E")`,
+          backgroundSize: "60px 60px"
+        }}
+      />
+
       {/* Header */}
-      <header className="border-b border-purple-900/20 bg-slate-950/50 backdrop-blur-sm sticky top-0 z-20">
+      <header className="border-b border-purple-900/30 bg-purple-950/80 backdrop-blur-sm sticky top-0 z-20 relative">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/dashboard">
-            <Button variant="ghost" className="text-white gap-2">
+            <Button variant="ghost" className="text-purple-400 hover:text-purple-300 gap-2">
               <ArrowLeft className="w-4 h-4" />
-              Back to Command Center
+              EXIT ARSENAL
             </Button>
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white font-mono">LEGAL ARSENAL</h1>
-            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+            <Zap className="w-5 h-5 text-purple-500" />
+            <h1 className="text-xl font-bold text-purple-500 font-mono tracking-wider">LEGAL ARSENAL</h1>
+            <div className="flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" style={{ animationDelay: "0.3s" }} />
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 relative z-10">
         {/* Sector Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-white mb-2 font-mono">LEGAL ARSENAL</h1>
-          <p className="text-slate-400">Constitutional analysis, criminal law, civil rights claims</p>
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Zap className="w-10 h-10 text-purple-500" />
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent font-mono">WEAPON VAULT</h1>
+            <Zap className="w-10 h-10 text-violet-500" />
+          </div>
+          <p className="text-purple-400/80 font-mono uppercase tracking-wide">Constitutional • Criminal • Civil Rights • Appellate</p>
+          <div className="mt-4 inline-block px-4 py-2 bg-purple-950/50 border border-purple-500/50 rounded shadow-lg shadow-purple-500/20">
+            <p className="text-purple-400 font-mono text-sm">ARMORY STATUS: <span className="text-purple-400 font-bold">FULLY LOADED</span></p>
+          </div>
         </div>
 
-        {/* Agent Selection */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Weapon Selection */}
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
           {ARSENAL_AGENTS.map((agent) => (
             <Card
               key={agent.id}
-              className={`cursor-pointer transition-all ${
+              className={`cursor-pointer transition-all border-2 ${
                 selectedAgent === agent.id
-                  ? `bg-${agent.color}-900/30 border-${agent.color}-500/50 shadow-lg shadow-${agent.color}-500/20`
-                  : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
+                  ? "bg-purple-900/30 border-purple-500 shadow-lg shadow-purple-500/50"
+                  : "bg-slate-900/60 border-purple-900/30 hover:border-purple-700/50"
               }`}
               onClick={() => {
                 setSelectedAgent(agent.id);
@@ -116,21 +203,20 @@ export default function LegalArsenal() {
               }}
             >
               <CardHeader>
-                <div className={`w-12 h-12 rounded-lg bg-${agent.color}-500/20 flex items-center justify-center text-${agent.color}-400 mb-3`}>
-                  {agent.icon}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-14 h-14 rounded-lg bg-purple-500/20 border-2 border-purple-500/50 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/30">
+                    {agent.icon}
+                  </div>
+                  <div className="px-3 py-1 rounded bg-gradient-to-r from-purple-600 to-violet-600 text-white text-xs font-mono font-bold shadow-lg">
+                    {agent.ammo}
+                  </div>
                 </div>
-                <CardTitle className="text-white text-sm">{agent.name}</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">{agent.description}</CardDescription>
+                <CardTitle className="text-purple-400 font-mono text-lg">{agent.name}</CardTitle>
+                <CardDescription className="text-purple-400/60">{agent.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-slate-500 italic mb-2">"{agent.tagline}"</p>
-                <div className="space-y-1">
-                  {agent.focus.slice(0, 3).map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-slate-600">
-                      <div className={`w-1 h-1 rounded-full bg-${agent.color}-500`} />
-                      <span>{item}</span>
-                    </div>
-                  ))}
+                <div className="p-3 bg-purple-950/30 border border-purple-900/30 rounded">
+                  <p className="text-xs text-purple-400/80 italic font-mono">"{agent.tagline}"</p>
                 </div>
               </CardContent>
             </Card>
@@ -140,37 +226,37 @@ export default function LegalArsenal() {
         {/* Input Section */}
         {selectedAgent && (
           <div className="space-y-6">
-            <Card className="bg-slate-900/50 border-slate-800">
+            <Card className="bg-slate-900/60 border-purple-900/30 shadow-lg shadow-purple-900/20">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Sparkles className={`w-5 h-5 text-${selectedAgentData?.color}-400`} />
+                <CardTitle className="text-purple-400 flex items-center gap-2 font-mono">
+                  <Sparkles className="w-5 h-5 text-purple-500" />
                   {selectedAgentData?.name} Interface
                 </CardTitle>
-                <CardDescription>
-                  Provide case facts, documents, or legal issues for analysis
+                <CardDescription className="text-purple-400/60">
+                  Provide case facts, violations, or legal issues for analysis
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
-                  placeholder="Enter facts, court documents, or describe the legal violations..."
+                  placeholder="Enter constitutional violations, criminal misconduct, civil rights issues, or appellate grounds..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  className="min-h-[200px] bg-slate-950/50 border-slate-700 text-white font-mono text-sm"
+                  className="min-h-[200px] bg-slate-950/50 border-purple-900/50 text-purple-400 font-mono text-sm placeholder:text-purple-900"
                 />
                 <Button
                   onClick={handleProcess}
                   disabled={processAgent.isPending || !input.trim()}
-                  className={`w-full bg-${selectedAgentData?.color}-600 hover:bg-${selectedAgentData?.color}-700`}
+                  className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-mono tracking-wide shadow-lg shadow-purple-500/30"
                 >
                   {processAgent.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Analyzing...
+                      CHARGING WEAPON...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Analyze Violations
+                      <Zap className="w-4 h-4 mr-2" />
+                      DEPLOY LEGAL WEAPON
                     </>
                   )}
                 </Button>
@@ -179,19 +265,19 @@ export default function LegalArsenal() {
 
             {/* Results Section */}
             {result && (
-              <Card className="bg-slate-900/50 border-green-900/30">
+              <Card className="bg-slate-900/60 border-green-900/30 shadow-lg shadow-green-900/20">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-green-400" />
-                    Legal Analysis
+                  <CardTitle className="text-green-400 flex items-center gap-2 font-mono">
+                    <Sparkles className="w-5 h-5 text-green-500" />
+                    WEAPON DEPLOYED
                   </CardTitle>
-                  <CardDescription>
-                    Violations identified, case law, and litigation strategy
+                  <CardDescription className="text-green-400/60">
+                    Legal analysis with constitutional grounds and case citations
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="prose prose-invert max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm bg-slate-950/50 p-4 rounded-lg border border-slate-800 text-slate-300 font-mono">
+                    <pre className="whitespace-pre-wrap text-sm bg-slate-950/50 p-4 rounded-lg border border-green-900/30 text-green-400 font-mono">
                       {result}
                     </pre>
                   </div>
@@ -203,15 +289,15 @@ export default function LegalArsenal() {
 
         {/* Help Section */}
         {!selectedAgent && (
-          <Card className="bg-purple-900/10 border-purple-900/30">
+          <Card className="bg-purple-950/20 border-purple-900/30">
             <CardHeader>
-              <CardTitle className="text-white">How to Use Legal Arsenal</CardTitle>
+              <CardTitle className="text-purple-400 font-mono">ARSENAL PROTOCOL</CardTitle>
             </CardHeader>
-            <CardContent className="text-slate-400 space-y-2">
-              <p>1. Select an analysis agent based on the type of violation</p>
-              <p>2. Provide case facts, documents, or describe the legal issues</p>
-              <p>3. The agent will identify violations, cite relevant law, and provide strategy</p>
-              <p>4. All analyses include immunity-piercing and abstention-bypass tactics</p>
+            <CardContent className="text-purple-400/70 space-y-2 font-mono text-sm">
+              <p>1. SELECT LEGAL WEAPON based on violation type</p>
+              <p>2. PROVIDE TARGET INTEL (facts, violations, legal issues)</p>
+              <p>3. RECEIVE WEAPONIZED ANALYSIS with constitutional grounds</p>
+              <p>4. DEPLOY IN LEGAL PROCEEDINGS with full citation support</p>
             </CardContent>
           </Card>
         )}
