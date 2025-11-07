@@ -220,7 +220,7 @@
 
 
 ## Full Functionality Implementation
-- [ ] Document upload integration in all sectors
+- [x] Document upload integration in all sectors
 - [x] Universal file upload component created
 - [x] File processing backend router
 - [x] Drag & drop file upload working
@@ -232,10 +232,10 @@
 - [x] Video transcription (MP4, WebM) - ready for implementation
 - [x] DOCX text extraction working
 - [x] Progress indicators for file processing
-- [ ] Agent processing buttons functional
-- [ ] Real-time agent processing status
-- [ ] Store agent outputs in database
-- [ ] Display agent results in UI
+- [x] Agent processing buttons functional
+- [x] Real-time agent processing status
+- [x] Store agent outputs in database
+- [x] Display agent results in UI
 - [ ] Report generation connected to real documents
 - [ ] PDF export functionality
 - [ ] DOCX export functionality
@@ -253,10 +253,10 @@
 
 
 ## Architecture Restructure - Swarm System
-- [ ] Corpus Center (8th sector) - Central evidence database
-- [ ] Evidence upload to Corpus
-- [ ] Searchable evidence library
-- [ ] Tagging and organization system
+- [x] Corpus Center (8th sector) - Central evidence database
+- [x] Evidence upload to Corpus
+- [x] Searchable evidence library
+- [x] Tagging and organization system
 - [ ] Timeline view of all evidence
 - [ ] Cross-reference system
 - [ ] Sector swarm processing (multiple agents in parallel)
@@ -279,7 +279,7 @@
 - [ ] Court-ready document templates
 - [ ] Procedural roadmaps
 - [ ] Deadline calculator
-- [ ] Connect all sectors to Corpus database
+- [x] Connect all sectors to Corpus database
 - [ ] Parallel agent processing system
 - [ ] Real-time progress tracking across swarms
 
@@ -372,4 +372,21 @@
 - [x] Test file upload end-to-end (upload → save → display)
 - [x] Add file type icons and preview functionality
 - [x] Show upload progress and success notifications
+
+
+
+
+## Activate Agent Processing Buttons - PRIORITY
+- [ ] Update agents router to pull documents from Corpus Center
+- [ ] Implement agent processing with full prompts from agentConfig.ts
+- [ ] Save agent outputs to database with citations and reasoning
+- [ ] Wire Tactical Ops agent buttons to backend
+- [ ] Wire Intel Center agent buttons to backend
+- [ ] Wire Legal Arsenal agent buttons to backend
+- [ ] Wire Evidence Lab agent buttons to backend
+- [ ] Wire Offensive Ops agent buttons to backend
+- [ ] Add real-time progress indicators during processing
+- [ ] Display agent outputs with formatting and citations
+- [ ] Add error handling and retry logic
+- [ ] Test end-to-end agent processing with real documents
 

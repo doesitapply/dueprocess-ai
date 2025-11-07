@@ -116,25 +116,29 @@ export default function TacticalOps() {
     return () => cancelAnimationFrame(animationId);
   }, []);
 
-  const processAgent = trpc.agents.process.useMutation({
-    onSuccess: (data) => {
+  // Get user's documents from Corpus
+  const { data: documents } = trpc.documents.list.useQuery();
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+
+  const processAgent = trpc.agents.processDocument.useMutation({
+    onSuccess: (data: any) => {
       setResult(typeof data.output === 'string' ? data.output : JSON.stringify(data.output));
       toast.success("Tactical analysis complete!");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
 
   const handleProcess = () => {
-    if (!selectedAgent || !input.trim()) {
-      toast.error("Please select an agent and provide input");
+    if (!selectedAgent || !selectedDocumentId) {
+      toast.error("Please select an agent and a document");
       return;
     }
 
     processAgent.mutate({
+      documentId: selectedDocumentId,
       agentId: selectedAgent,
-      input: input.trim(),
     });
   };
 
@@ -241,15 +245,26 @@ export default function TacticalOps() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="Enter court transcript, legal document, or describe the situation..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  className="min-h-[200px] bg-black/50 border-red-900/50 text-red-400 font-mono text-sm placeholder:text-red-900"
-                />
+                {/* Document Selector */}
+                <div className="space-y-2">
+                  <label className="text-red-400 font-mono text-sm">SELECT DOCUMENT FROM CORPUS</label>
+                  <select
+                    value={selectedDocumentId || ""}
+                    onChange={(e) => setSelectedDocumentId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full bg-black/50 border border-red-900/50 text-red-400 font-mono text-sm p-3 rounded"
+                  >
+                    <option value="">-- Select a document --</option>
+                    {documents?.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.fileName} ({new Date(doc.createdAt).toLocaleDateString()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <Button
                   onClick={handleProcess}
-                  disabled={processAgent.isPending || !input.trim()}
+                  disabled={processAgent.isPending || !selectedDocumentId}
                   className="w-full bg-red-600 hover:bg-red-700 text-white font-mono tracking-wide"
                 >
                   {processAgent.isPending ? (

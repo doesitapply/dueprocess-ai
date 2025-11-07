@@ -32,31 +32,93 @@ export const appRouter = router({
   integrations: integrationsRouter,
 
   agents: router({
-    process: protectedProcedure
+    /**
+     * Process a document with a specific agent
+     */
+    processDocument: protectedProcedure
       .input(z.object({
+        documentId: z.number(),
         agentId: z.string(),
-        input: z.string(),
       }))
-      .mutation(async ({ input }) => {
-        const agent = getAgentById(input.agentId);
+      .mutation(async ({ input, ctx }) => {
+        const { documentId, agentId } = input;
+        const userId = ctx.user.id;
+
+        // Get the agent configuration
+        const agent = getAgentById(agentId);
         if (!agent) {
           throw new Error("Agent not found");
         }
 
-        const response = await invokeLLM({
-          messages: [
-            { role: "system", content: agent.systemPrompt },
-            { role: "user", content: input.input },
-          ],
-        });
+        // Get the document
+        const document = await getDocumentById(documentId);
+        if (!document || document.userId !== userId) {
+          throw new Error("Document not found or unauthorized");
+        }
 
-        const output = response.choices[0]?.message?.content || "No response generated";
+        // Update document status to processing
+        await updateDocumentStatus(documentId, "processing");
 
-        return {
-          agentId: agent.id,
-          agentName: agent.name,
-          output,
-        };
+        try {
+          // Prepare the input for the agent
+          const documentContent = document.extractedText || document.summary || "[No text content available]";
+          const userPrompt = `Analyze this document:\n\nFilename: ${document.fileName}\nContent:\n${documentContent}`;
+
+          // Call the LLM with the agent's system prompt
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: agent.systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+          });
+
+          const messageContent = response.choices[0]?.message?.content;
+          const output = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent) || "No response generated";
+
+          // Save the agent output to database
+          await createAgentOutput({
+            documentId,
+            agentId: agent.id,
+            agentName: agent.name,
+            output,
+          });
+
+          // Update document status to completed
+          await updateDocumentStatus(documentId, "completed");
+
+          return {
+            success: true,
+            agentId: agent.id,
+            agentName: agent.name,
+            output,
+          };
+        } catch (error) {
+          // Update document status to failed
+          await updateDocumentStatus(documentId, "failed");
+          throw error;
+        }
+      }),
+
+    /**
+     * Get agent outputs for a document
+     */
+    getOutputs: protectedProcedure
+      .input(z.object({
+        documentId: z.number(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const { documentId } = input;
+        const userId = ctx.user.id;
+
+        // Verify document ownership
+        const document = await getDocumentById(documentId);
+        if (!document || document.userId !== userId) {
+          throw new Error("Document not found or unauthorized");
+        }
+
+        // Get all agent outputs for this document
+        const outputs = await getAgentOutputByDocumentId(documentId);
+        return outputs;
       }),
   }),
 

@@ -109,25 +109,29 @@ export default function IntelCenter() {
     return () => cancelAnimationFrame(animationId);
   }, []);
 
-  const processAgent = trpc.agents.process.useMutation({
-    onSuccess: (data) => {
+  // Get user's documents from Corpus
+  const { data: documents } = trpc.documents.list.useQuery();
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+
+  const processAgent = trpc.agents.processDocument.useMutation({
+    onSuccess: (data: any) => {
       setResult(typeof data.output === 'string' ? data.output : JSON.stringify(data.output));
       toast.success("Research complete!");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
 
   const handleProcess = () => {
-    if (!selectedAgent || !input.trim()) {
-      toast.error("Please select an agent and provide input");
+    if (!selectedAgent || !selectedDocumentId) {
+      toast.error("Please select an agent and a document");
       return;
     }
 
     processAgent.mutate({
+      documentId: selectedDocumentId,
       agentId: selectedAgent,
-      input: input.trim(),
     });
   };
 
@@ -240,15 +244,32 @@ export default function IntelCenter() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <Textarea
-                      placeholder="Enter your legal question, facts, or area of law to research..."
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      className="min-h-[200px] bg-slate-950/50 border-cyan-900/50 text-cyan-400 font-mono text-sm placeholder:text-cyan-900"
-                    />
+                    {/* Document Selector */}
+                    <div className="space-y-2">
+                      <label className="text-sm text-cyan-400 font-mono">Select Document from Corpus</label>
+                      {documents && documents.length > 0 ? (
+                        <select
+                          value={selectedDocumentId ?? ""}
+                          onChange={(e) => setSelectedDocumentId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full p-3 bg-slate-950/50 border border-cyan-900/50 rounded text-cyan-400 font-mono text-sm"
+                        >
+                          <option value="">-- Select a document --</option>
+                          {documents.map((doc: any) => (
+                            <option key={doc.id} value={doc.id}>
+                              {doc.fileName} ({new Date(doc.uploadedAt).toLocaleDateString()})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="p-4 bg-cyan-950/20 border border-cyan-900/30 rounded text-cyan-400/60 text-sm">
+                          No documents in Corpus Center. Upload documents first.
+                        </div>
+                      )}
+                    </div>
+
                     <Button
                       onClick={handleProcess}
-                      disabled={processAgent.isPending || !input.trim()}
+                      disabled={processAgent.isPending || !selectedDocumentId}
                       className="w-full bg-cyan-600 hover:bg-cyan-700 font-mono"
                     >
                       {processAgent.isPending ? (

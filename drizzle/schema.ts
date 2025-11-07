@@ -87,17 +87,22 @@ export const agentOutputs = mysqlTable("agent_outputs", {
   id: int("id").autoincrement().primaryKey(),
   documentId: int("documentId").notNull(),
   
-  // Justice Jester outputs
+  // Generic agent fields (for new specialized agents)
+  agentId: varchar("agentId", { length: 100 }),
+  agentName: varchar("agentName", { length: 255 }),
+  output: text("output"), // Full agent output
+  
+  // Justice Jester outputs (legacy)
   jesterMemeCaption: text("jesterMemeCaption"),
   jesterTiktokScript: text("jesterTiktokScript"),
   jesterQuote: text("jesterQuote"),
   
-  // Law Clerk outputs
+  // Law Clerk outputs (legacy)
   clerkViolations: text("clerkViolations"), // JSON array
   clerkCaseLaw: text("clerkCaseLaw"), // JSON array
   clerkMotionDraft: text("clerkMotionDraft"),
   
-  // Hobot outputs
+  // Hobot outputs (legacy)
   hobotProductName: varchar("hobotProductName", { length: 255 }),
   hobotDescription: text("hobotDescription"),
   hobotLink: text("hobotLink"),
