@@ -189,8 +189,11 @@ export default function Home() {
               Your transcript. Our analysis. <span className="text-red-400 font-semibold">Their problem.</span>
             </p>
 
-            <p className="text-lg text-slate-400 mb-12 max-w-2xl mx-auto italic">
-              "Justice delayed is justice denied. We're the receipts."
+            <p className="text-lg text-slate-400 mb-6 max-w-2xl mx-auto">
+              Qualified Immunity. Prosecutorial Immunity. Absolute Immunity.
+            </p>
+            <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-12 max-w-2xl mx-auto">
+              Pattern Recognition.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
@@ -217,6 +220,16 @@ export default function Home() {
               </Link>
             </div>
 
+            {/* Immunity Callout */}
+            <div className="max-w-3xl mx-auto mb-12 p-6 bg-slate-900/50 border border-red-500/30 rounded-lg">
+              <p className="text-slate-300 text-center text-lg mb-2">
+                <span className="text-red-400 font-semibold">They said they were untouchable.</span>
+              </p>
+              <p className="text-slate-400 text-center italic">
+                They forgot about discovery. And pattern analysis. And the First Amendment.
+              </p>
+            </div>
+
             {/* Stats */}
             <div className="grid grid-cols-3 gap-8 max-w-3xl mx-auto mb-20">
               <div className="text-center">
@@ -229,7 +242,7 @@ export default function Home() {
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold text-red-400 mb-2">0</div>
-                <div className="text-sm text-slate-400">Mercy</div>
+                <div className="text-sm text-slate-400">Immunity Shields</div>
               </div>
             </div>
           </div>
@@ -238,12 +251,15 @@ export default function Home() {
         {/* The Agents - Dark Humor Edition */}
         <section className="container mx-auto px-4 py-20 border-t border-red-900/20">
           <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
+              <div className="text-center mb-16">
               <h2 className="text-4xl font-bold text-white mb-4">
                 Meet Your Legal Weapons
               </h2>
-              <p className="text-xl text-slate-400">
+              <p className="text-xl text-slate-400 mb-4">
                 Three AI agents. One mission: <span className="text-red-400">Make corruption visible.</span>
+              </p>
+              <p className="text-sm text-slate-500 italic">
+                (Because you can't sue them. But you can absolutely expose them.)
               </p>
             </div>
 
@@ -259,10 +275,10 @@ export default function Home() {
                 <h3 className="text-2xl font-bold text-white mb-2">Justice Jester</h3>
                 <p className="text-purple-400 text-sm font-medium mb-4">Viral Content Generator</p>
                 <p className="text-slate-300 mb-6">
-                  Turns legal proceedings into shareable content. Because if a judge falls in the forest and nobody tweets about it, did it even happen?
+                  Turns legal proceedings into shareable content. Because immunity protects you from lawsuits. Not from going viral.
                 </p>
                 <div className="text-sm text-slate-400 italic">
-                  "We don't just process documents. We process careers."
+                  "Absolute immunity. Absolutely documented."
                 </div>
               </div>
 
@@ -277,10 +293,10 @@ export default function Home() {
                 <h3 className="text-2xl font-bold text-white mb-2">Law Clerk</h3>
                 <p className="text-blue-400 text-sm font-medium mb-4">Legal Analysis Engine</p>
                 <p className="text-slate-300 mb-6">
-                  Extracts violations, cites case law, drafts motions. Basically does what your lawyer should have done. But didn't.
+                  Extracts violations, cites case law, identifies patterns. They hide behind immunity. We hide behind discovery and the First Amendment.
                 </p>
                 <div className="text-sm text-slate-400 italic">
-                  "Your Honor, the evidence speaks for itself. Unfortunately, so does the corruption."
+                  "Prosecutorial discretion meets pattern analysis. Guess which one the public believes?"
                 </div>
               </div>
 
@@ -368,11 +384,14 @@ export default function Home() {
                 <h2 className="text-4xl font-bold text-white mb-4">
                   Ready to Make Some People Uncomfortable?
                 </h2>
-                <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-                  Join the whistleblowers, truth-seekers, and legally-armed citizens who refuse to let corruption hide in plain sight.
+                <p className="text-xl text-slate-300 mb-6 max-w-2xl mx-auto">
+                  Join the whistleblowers, truth-seekers, and legally-armed citizens who refuse to let corruption hide behind immunity.
+                </p>
+                <p className="text-lg text-red-400 font-semibold mb-4">
+                  They thought qualified immunity made them untouchable.
                 </p>
                 <p className="text-sm text-slate-400 mb-8 italic">
-                  "Because sometimes the only thing funnier than justice is the lack of it."
+                  They didn't understand how hard it is to hide when pattern recognition meets public exposure.
                 </p>
                 {isAuthenticated ? (
                   <Link href="/dashboard">
