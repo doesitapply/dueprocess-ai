@@ -10,8 +10,11 @@ import {
   getDocumentById, 
   updateDocumentStatus,
   createAgentOutput,
-  getAgentOutputByDocumentId
+  getAgentOutputByDocumentId,
+  getDb
 } from "./db";
+import { documents, agentOutputs, subscriptions, payments, users } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 
@@ -27,6 +30,38 @@ export const appRouter = router({
       return {
         success: true,
       } as const;
+    }),
+    
+    // Delete user account and all associated data
+    deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const userId = ctx.user.id;
+
+      // Delete all agent outputs for user's documents
+      const userDocs = await getUserDocuments(userId);
+      for (const doc of userDocs) {
+        await db.delete(agentOutputs).where(eq(agentOutputs.documentId, doc.id));
+      }
+
+      // Delete all documents
+      await db.delete(documents).where(eq(documents.userId, userId));
+
+      // Delete payments
+      await db.delete(payments).where(eq(payments.userId, userId));
+
+      // Delete subscription
+      await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+
+      // Delete user
+      await db.delete(users).where(eq(users.id, userId));
+
+      // Clear session cookie
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+
+      return { success: true };
     }),
   }),
 
@@ -212,6 +247,45 @@ You respond with a structured JSON containing all outputs.`
           throw error;
         }
       }),
+
+    // Delete a document
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const document = await getDocumentById(input.id);
+        
+        if (!document || document.userId !== ctx.user.id) {
+          throw new Error("Document not found");
+        }
+
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        // Delete agent outputs first
+        await db.delete(agentOutputs).where(eq(agentOutputs.documentId, input.id));
+        
+        // Delete document
+        await db.delete(documents).where(eq(documents.id, input.id));
+
+        return { success: true };
+      }),
+
+    // Delete all user documents
+    deleteAll: protectedProcedure.mutation(async ({ ctx }) => {
+      const userDocs = await getUserDocuments(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Delete all agent outputs for user's documents
+      for (const doc of userDocs) {
+        await db.delete(agentOutputs).where(eq(agentOutputs.documentId, doc.id));
+      }
+
+      // Delete all documents
+      await db.delete(documents).where(eq(documents.userId, ctx.user.id));
+
+      return { success: true };
+    }),
   }),
 });
 

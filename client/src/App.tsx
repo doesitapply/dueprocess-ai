@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import ProcessDocument from "./pages/ProcessDocument";
 import Pricing from "./pages/Pricing";
 import Payments from "./pages/Payments";
+import Settings from "./pages/Settings";
 
 function Router() {
   return (
@@ -16,6 +17,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/pricing"} component={Pricing} />
       <Route path={"/payments"} component={Payments} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/process/:id"} component={ProcessDocument} />
       <Route path={"/404"} component={NotFound} />

@@ -24,3 +24,15 @@
 - [ ] Access control based on subscription tier (limit documents per plan)
 - [ ] Configure actual Stripe Price IDs in products.ts
 
+
+
+## Settings Page Features
+- [x] Settings page UI
+- [x] Delete individual documents
+- [x] Bulk delete documents
+- [x] View subscription details
+- [x] Cancel subscription
+- [x] Resume subscription
+- [x] Delete account and all data
+- [x] Account information display
+

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { FileText, Upload, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { FileText, Upload, Clock, CheckCircle, XCircle, Loader2, Settings as SettingsIcon } from "lucide-react";
 import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
@@ -130,6 +130,11 @@ export default function Dashboard() {
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-slate-400 text-sm">Welcome, {user?.name || user?.email}</span>
+            <Link href="/settings">
+              <Button variant="ghost" size="sm" className="text-white">
+                <SettingsIcon className="w-4 h-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
