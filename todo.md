@@ -360,3 +360,16 @@
 - [ ] Event log viewer
 - [ ] Job queue status
 
+
+
+
+## Fix File Upload System - URGENT
+- [x] Debug why uploaded files aren't saving to database
+- [x] Fix upload router to properly save files with metadata
+- [x] Added listDocuments endpoint to upload router
+- [x] Connect Corpus Center to query and display uploaded documents
+- [x] Connected file upload handler to tRPC mutation
+- [x] Test file upload end-to-end (upload → save → display)
+- [x] Add file type icons and preview functionality
+- [x] Show upload progress and success notifications
+

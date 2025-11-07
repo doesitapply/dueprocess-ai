@@ -161,6 +161,25 @@ export const uploadRouter = router({
     }),
 
   /**
+   * List all documents for the current user
+   */
+  listDocuments: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) {
+      throw new Error("Database not available");
+    }
+
+    const { eq, desc } = await import("drizzle-orm");
+    const results = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.userId, ctx.user.id))
+      .orderBy(desc(documents.createdAt));
+
+    return results;
+  }),
+
+  /**
    * Search documents by semantic similarity
    */
   searchDocuments: protectedProcedure

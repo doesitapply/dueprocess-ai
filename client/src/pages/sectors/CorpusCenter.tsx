@@ -99,6 +99,8 @@ export default function CorpusCenter() {
 
   // Fetch documents
   const { data: documents, isLoading } = trpc.documents.list.useQuery();
+  const uploadFile = trpc.upload.uploadFile.useMutation();
+  const utils = trpc.useUtils();
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -106,11 +108,36 @@ export default function CorpusCenter() {
 
     toast.info(`Uploading ${files.length} file(s)...`);
     
-    // TODO: Implement actual upload
-    // For now, just show success
-    setTimeout(() => {
-      toast.success("Files uploaded to Corpus");
-    }, 1500);
+    try {
+      for (const file of Array.from(files)) {
+        // Read file as base64
+        const reader = new FileReader();
+        const fileData = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const base64 = reader.result as string;
+            // Remove data URL prefix
+            const base64Data = base64.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // Upload file
+        await uploadFile.mutateAsync({
+          fileName: file.name,
+          fileData,
+          mimeType: file.type || 'application/octet-stream',
+        });
+      }
+
+      toast.success(`${files.length} file(s) uploaded to Corpus!`);
+      // Refresh document list
+      utils.documents.list.invalidate();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload files');
+    }
   };
 
   const filteredDocuments = documents?.filter(doc => {
