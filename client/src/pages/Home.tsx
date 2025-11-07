@@ -17,7 +17,10 @@ export default function Home() {
             {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-8 w-8" />}
             <h1 className="text-xl font-bold text-white">{APP_TITLE}</h1>
           </div>
-          <div>
+          <div className="flex items-center gap-4">
+            <Link href="/pricing">
+              <Button variant="outline">Pricing</Button>
+            </Link>
             {isAuthenticated ? (
               <Link href="/dashboard">
                 <Button variant="default">Go to Dashboard</Button>

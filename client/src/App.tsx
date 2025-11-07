@@ -7,11 +7,15 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import ProcessDocument from "./pages/ProcessDocument";
+import Pricing from "./pages/Pricing";
+import Payments from "./pages/Payments";
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
+      <Route path={"/pricing"} component={Pricing} />
+      <Route path={"/payments"} component={Payments} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/process/:id"} component={ProcessDocument} />
       <Route path={"/404"} component={NotFound} />

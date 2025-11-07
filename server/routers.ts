@@ -3,6 +3,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { stripeRouter } from "./stripeRouter";
 import { 
   createDocument, 
   getUserDocuments, 
@@ -16,6 +17,7 @@ import { invokeLLM } from "./_core/llm";
 
 export const appRouter = router({
   system: systemRouter,
+  stripe: stripeRouter,
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

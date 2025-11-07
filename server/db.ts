@@ -1,6 +1,21 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, documents, InsertDocument, Document, agentOutputs, InsertAgentOutput, AgentOutput } from "../drizzle/schema";
+import { 
+  InsertUser, 
+  users, 
+  documents, 
+  InsertDocument, 
+  Document, 
+  agentOutputs, 
+  InsertAgentOutput, 
+  AgentOutput,
+  subscriptions,
+  InsertSubscription,
+  Subscription,
+  payments,
+  InsertPayment,
+  Payment
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -146,5 +161,69 @@ export async function getAgentOutputByDocumentId(documentId: number): Promise<Ag
 
   const result = await db.select().from(agentOutputs).where(eq(agentOutputs.documentId, documentId)).limit(1);
   return result[0];
+}
+
+// Subscription queries
+export async function getSubscriptionByUserId(userId: number): Promise<Subscription | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return result[0];
+}
+
+export async function upsertSubscription(sub: InsertSubscription): Promise<Subscription> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(subscriptions).values(sub).onDuplicateKeyUpdate({
+    set: {
+      stripeCustomerId: sub.stripeCustomerId,
+      stripeSubscriptionId: sub.stripeSubscriptionId,
+      stripePriceId: sub.stripePriceId,
+      plan: sub.plan,
+      status: sub.status,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    },
+  });
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.userId, sub.userId)).limit(1);
+  return result[0];
+}
+
+export async function getSubscriptionByStripeId(stripeSubscriptionId: string): Promise<Subscription | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId)).limit(1);
+  return result[0];
+}
+
+// Payment queries
+export async function createPayment(payment: InsertPayment): Promise<Payment> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(payments).values(payment);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(payments).where(eq(payments.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getUserPayments(userId: number): Promise<Payment[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(payments).where(eq(payments.userId, userId)).orderBy(desc(payments.createdAt));
+}
+
+export async function updatePaymentStatus(stripeSessionId: string, status: Payment['status']): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(payments).set({ status }).where(eq(payments.stripeSessionId, stripeSessionId));
 }
 
