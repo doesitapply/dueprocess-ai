@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { Target, Brain, Scale, Microscope, Rocket, Network, Settings as SettingsIcon, Loader2, Zap } from "lucide-react";
+import { Target, Brain, Scale, Microscope, Rocket, Network, Settings as SettingsIcon, Loader2, Zap, Database } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -17,6 +17,15 @@ interface Sector {
 }
 
 const SECTORS: Sector[] = [
+  {
+    id: "corpus",
+    name: "CORPUS CENTER",
+    description: "Central evidence database - all sectors pull from here",
+    icon: <Database className="w-12 h-12" />,
+    route: "/sector/corpus",
+    color: "from-green-900/20 to-slate-900/50",
+    glowColor: "green-500"
+  },
   {
     id: "tactical",
     name: "TACTICAL OPS",
@@ -251,7 +260,7 @@ export default function Dashboard() {
           </Card>
           <Card className="bg-slate-900/50 border-slate-800">
             <CardContent className="p-6 text-center">
-              <div className="text-4xl font-bold text-green-500 font-mono mb-2">6</div>
+              <div className="text-4xl font-bold text-green-500 font-mono mb-2">7</div>
               <div className="text-slate-400 text-sm font-mono">OPERATIONAL SECTORS</div>
             </CardContent>
           </Card>

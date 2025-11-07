@@ -249,3 +249,54 @@
 - [ ] Citation generator functional
 - [ ] End-to-end testing of all features
 
+
+
+
+## Architecture Restructure - Swarm System
+- [ ] Corpus Center (8th sector) - Central evidence database
+- [ ] Evidence upload to Corpus
+- [ ] Searchable evidence library
+- [ ] Tagging and organization system
+- [ ] Timeline view of all evidence
+- [ ] Cross-reference system
+- [ ] Sector swarm processing (multiple agents in parallel)
+- [ ] Tactical Ops Swarm - Combined tactical report
+- [ ] Intel Center Swarm - Intelligence brief compilation
+- [ ] Legal Arsenal Swarm - Multi-domain analysis
+- [ ] Evidence Lab Swarm - Forensic analysis suite
+- [ ] Offensive Ops Swarm - Strategy and drafting
+- [ ] Command Center (7th sector) - Unified overview
+- [ ] Aggregate all sector outputs
+- [ ] Master timeline across sectors
+- [ ] Unified strategy recommendations
+- [ ] Cross-sector pattern recognition
+- [ ] "What to do next" action plan
+- [ ] Priority ranking system
+- [ ] Output Hub (9th sector) - Court-ready products
+- [ ] Motion drafting station
+- [ ] Complaint constructor
+- [ ] Filing instructions generator
+- [ ] Court-ready document templates
+- [ ] Procedural roadmaps
+- [ ] Deadline calculator
+- [ ] Connect all sectors to Corpus database
+- [ ] Parallel agent processing system
+- [ ] Real-time progress tracking across swarms
+
+
+
+
+## RAG System & Vector Search
+- [ ] Update database schema for text content storage
+- [ ] Add vector embeddings column to documents table
+- [ ] Fix file upload to actually save to database
+- [ ] Extract text content from uploaded files
+- [ ] Generate vector embeddings for documents
+- [ ] Implement semantic search endpoint
+- [ ] Vector similarity search across Corpus
+- [ ] RAG context retrieval for agents
+- [ ] Agents cite source documents in analysis
+- [ ] Cross-reference evidence across files
+- [ ] Search by meaning, not just keywords
+- [ ] Relevant document suggestions
+

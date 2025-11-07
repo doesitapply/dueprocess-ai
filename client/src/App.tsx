@@ -16,6 +16,7 @@ import LegalArsenal from "./pages/sectors/LegalArsenal";
 import EvidenceLab from "./pages/sectors/EvidenceLab";
 import OffensiveOps from "./pages/sectors/OffensiveOps";
 import IntegrationsHub from "./pages/sectors/IntegrationsHub";
+import CorpusCenter from "./pages/sectors/CorpusCenter";
 import Reports from "./pages/Reports";
 
 function Router() {
@@ -34,6 +35,7 @@ function Router() {
       <Route path={"/sector/evidence"} component={EvidenceLab} />
       <Route path={"/sector/offensive"} component={OffensiveOps} />
       <Route path={"/sector/integrations"} component={IntegrationsHub} />
+      <Route path={"/sector/corpus"} component={CorpusCenter} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

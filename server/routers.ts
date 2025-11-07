@@ -20,12 +20,14 @@ import { invokeLLM } from "./_core/llm";
 import { getAgentById } from "./agentConfig";
 import { fileProcessingRouter } from "./fileProcessing";
 import { reportRouter } from "./reportGenerator";
+import { uploadRouter } from "./uploadRouter";
 
 export const appRouter = router({
   system: systemRouter,
   stripe: stripeRouter,
   fileProcessing: fileProcessingRouter,
   reports: reportRouter,
+  upload: uploadRouter,
 
   agents: router({
     process: protectedProcedure

@@ -69,6 +69,8 @@ export const documents = mysqlTable("documents", {
   fileKey: text("fileKey").notNull(),
   mimeType: varchar("mimeType", { length: 100 }),
   fileSize: int("fileSize"),
+  extractedText: text("extractedText"), // Full text content extracted from file
+  embedding: text("embedding"), // JSON string of vector embedding for semantic search
   status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
   summary: text("summary"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
