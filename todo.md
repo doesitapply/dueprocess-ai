@@ -119,3 +119,32 @@
 - [ ] Search results pagination
 - [ ] Export search results to PDF/CSV
 
+
+
+## Universal File Ingestion System
+- [ ] Database schema for file uploads and processing
+- [ ] Support PDF files with OCR for scanned documents
+- [ ] Support audio files (MP3, WAV, M4A, WebM) with auto-transcription
+- [ ] Support video files (MP4, WebM) with audio extraction and transcription
+- [ ] Support image files (PNG, JPG, JPEG) with OCR
+- [ ] Support text/markdown/JSON direct parsing
+- [ ] Support Word/DOCX text extraction
+- [ ] Drag-and-drop file upload component
+- [ ] Multi-file batch processing
+- [ ] Format auto-detection
+- [ ] Progress indicators for processing
+- [ ] File preview before processing
+- [ ] Add universal upload to all 6 sectors
+
+## Evidence Lab Advanced Forensics
+- [ ] Side-by-side document comparison viewer
+- [ ] Audio waveform visualization with timestamps
+- [ ] Video frame extraction and analysis
+- [ ] Multi-document cross-referencing
+- [ ] Automated evidence tagging system
+- [ ] Interactive timeline visualization with media
+- [ ] Contradiction highlighting across sources
+- [ ] Pattern detection across multiple file types
+- [ ] Evidence chain builder
+- [ ] Export forensic reports
+

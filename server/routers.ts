@@ -18,10 +18,12 @@ import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 import { getAgentById } from "./agentConfig";
+import { fileProcessingRouter } from "./fileProcessing";
 
 export const appRouter = router({
   system: systemRouter,
   stripe: stripeRouter,
+  fileProcessing: fileProcessingRouter,
 
   agents: router({
     process: protectedProcedure
