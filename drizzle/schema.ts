@@ -107,3 +107,67 @@ export const agentOutputs = mysqlTable("agent_outputs", {
 export type AgentOutput = typeof agentOutputs.$inferSelect;
 export type InsertAgentOutput = typeof agentOutputs.$inferInsert;
 
+/**
+ * Agent divisions for specialized legal analysis
+ */
+export const agentDivisions = mysqlTable("agent_divisions", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  category: mysqlEnum("category", ["research", "analysis", "tactical", "evidence", "offensive"]).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgentDivision = typeof agentDivisions.$inferSelect;
+export type InsertAgentDivision = typeof agentDivisions.$inferInsert;
+
+/**
+ * Specialized agents within divisions
+ */
+export const agents = mysqlTable("agents", {
+  id: int("id").autoincrement().primaryKey(),
+  divisionId: int("divisionId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  systemPrompt: text("systemPrompt").notNull(),
+  capabilities: text("capabilities"), // JSON array of capabilities
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Agent = typeof agents.$inferSelect;
+export type InsertAgent = typeof agents.$inferInsert;
+
+/**
+ * Legal citations and sources
+ */
+export const legalCitations = mysqlTable("legal_citations", {
+  id: int("id").autoincrement().primaryKey(),
+  outputId: int("outputId").notNull(), // Links to agentOutputs
+  citationType: mysqlEnum("citationType", ["case_law", "statute", "rule", "regulation", "constitution"]).notNull(),
+  citation: text("citation").notNull(), // Full citation text
+  source: varchar("source", { length: 100 }), // Justia, Westlaw, CourtListener, etc.
+  url: text("url"),
+  relevance: text("relevance"), // Why this citation matters
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LegalCitation = typeof legalCitations.$inferSelect;
+export type InsertLegalCitation = typeof legalCitations.$inferInsert;
+
+/**
+ * Agent reasoning and explanations
+ */
+export const agentReasoning = mysqlTable("agent_reasoning", {
+  id: int("id").autoincrement().primaryKey(),
+  outputId: int("outputId").notNull(), // Links to agentOutputs
+  step: int("step").notNull(), // Step number in reasoning chain
+  reasoning: text("reasoning").notNull(), // Explanation of this step
+  immunityPiercing: text("immunityPiercing"), // How this pierces immunity
+  abstentionBypass: text("abstentionBypass"), // How this bypasses abstention
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgentReasoning = typeof agentReasoning.$inferSelect;
+export type InsertAgentReasoning = typeof agentReasoning.$inferInsert;
+

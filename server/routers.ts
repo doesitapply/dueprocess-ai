@@ -17,10 +17,40 @@ import { documents, agentOutputs, subscriptions, payments, users } from "../driz
 import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import { getAgentById } from "./agentConfig";
 
 export const appRouter = router({
   system: systemRouter,
   stripe: stripeRouter,
+
+  agents: router({
+    process: protectedProcedure
+      .input(z.object({
+        agentId: z.string(),
+        input: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const agent = getAgentById(input.agentId);
+        if (!agent) {
+          throw new Error("Agent not found");
+        }
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: agent.systemPrompt },
+            { role: "user", content: input.input },
+          ],
+        });
+
+        const output = response.choices[0]?.message?.content || "No response generated";
+
+        return {
+          agentId: agent.id,
+          agentName: agent.name,
+          output,
+        };
+      }),
+  }),
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
