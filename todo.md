@@ -263,8 +263,8 @@
 - [x] Tactical Ops Swarm - Combined tactical report
 - [x] Intel Center Swarm - Intelligence brief compilation
 - [x] Legal Arsenal Swarm - Multi-domain analysis
-- [ ] Evidence Lab Swarm - Forensic analysis suite
-- [ ] Offensive Ops Swarm - Strategy and drafting
+- [x] Evidence Lab Swarm - Forensic analysis suite
+- [x] Offensive Ops Swarm - Strategy and drafting
 - [ ] Command Center (7th sector) - Unified overview
 - [ ] Aggregate all sector outputs
 - [ ] Master timeline across sectors
