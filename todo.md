@@ -411,3 +411,10 @@
 - [ ] Swarm processing history and management
 - [ ] Export swarm results as unified report
 
+
+
+
+## Bug Fixes
+- [x] Fix tRPC error on Corpus Center page - server returning HTML instead of JSON
+- [x] Remove animated canvas backgrounds from all sector pages to reduce CPU usage
+

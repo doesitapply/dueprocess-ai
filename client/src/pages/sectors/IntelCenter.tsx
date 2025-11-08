@@ -50,65 +50,7 @@ export default function IntelCenter() {
   const [input, setInput] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Holographic data stream animation
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const dataStreams: { x: number; y: number; speed: number; opacity: number }[] = [];
-    
-    for (let i = 0; i < 30; i++) {
-      dataStreams.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        speed: 0.5 + Math.random() * 1.5,
-        opacity: 0.3 + Math.random() * 0.4
-      });
-    }
-
-    const animate = () => {
-      ctx.fillStyle = "rgba(0, 10, 20, 0.1)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      dataStreams.forEach((stream) => {
-        // Draw data stream line
-        ctx.strokeStyle = `rgba(6, 182, 212, ${stream.opacity})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(stream.x, stream.y);
-        ctx.lineTo(stream.x, stream.y + 50);
-        ctx.stroke();
-
-        // Draw data points
-        for (let i = 0; i < 5; i++) {
-          const pointY = stream.y + i * 12;
-          ctx.fillStyle = `rgba(6, 182, 212, ${stream.opacity * 0.8})`;
-          ctx.fillRect(stream.x - 1, pointY, 2, 6);
-        }
-
-        stream.y += stream.speed;
-        
-        if (stream.y > canvas.height) {
-          stream.y = -50;
-          stream.x = Math.random() * canvas.width;
-        }
-      });
-
-      requestAnimationFrame(animate);
-    };
-
-    const animationId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationId);
-  }, []);
+  // Canvas animation removed to reduce CPU usage
 
   // Get user's documents from Corpus
   const { data: documents } = trpc.documents.list.useQuery();
@@ -140,8 +82,8 @@ export default function IntelCenter() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 relative overflow-hidden">
-      {/* Holographic data streams background */}
-      <canvas ref={canvasRef} className="absolute inset-0 opacity-40" />
+      {/* Static gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-950/20 via-slate-950 to-cyan-950/20 opacity-40" />
 
       {/* Grid overlay */}
       <div className="absolute inset-0 pointer-events-none opacity-5"

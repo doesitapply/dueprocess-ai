@@ -17,85 +17,7 @@ export default function CorpusCenter() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list" | "timeline">("grid");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Animated database visualization
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
-    const nodes: { x: number; y: number; vx: number; vy: number; connections: number[] }[] = [];
-    const nodeCount = 50;
-
-    // Create nodes
-    for (let i = 0; i < nodeCount; i++) {
-      nodes.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        connections: [],
-      });
-    }
-
-    // Create connections
-    nodes.forEach((node, i) => {
-      const connectionCount = Math.floor(Math.random() * 3) + 1;
-      for (let j = 0; j < connectionCount; j++) {
-        const targetIndex = Math.floor(Math.random() * nodeCount);
-        if (targetIndex !== i && !node.connections.includes(targetIndex)) {
-          node.connections.push(targetIndex);
-        }
-      }
-    });
-
-    let animationId: number;
-    const animate = () => {
-      ctx.fillStyle = "rgba(10, 10, 20, 0.1)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Update and draw connections
-      ctx.strokeStyle = "rgba(34, 197, 94, 0.2)";
-      ctx.lineWidth = 1;
-      nodes.forEach((node, i) => {
-        node.connections.forEach(targetIndex => {
-          const target = nodes[targetIndex];
-          ctx.beginPath();
-          ctx.moveTo(node.x, node.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.stroke();
-        });
-      });
-
-      // Update and draw nodes
-      nodes.forEach(node => {
-        node.x += node.vx;
-        node.y += node.vy;
-
-        if (node.x < 0 || node.x > canvas.width) node.vx *= -1;
-        if (node.y < 0 || node.y > canvas.height) node.vy *= -1;
-
-        ctx.fillStyle = "rgba(34, 197, 94, 0.6)";
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      animationId = requestAnimationFrame(animate);
-    };
-
-    animate();
-
-    return () => {
-      if (animationId) cancelAnimationFrame(animationId);
-    };
-  }, []);
+  // Canvas animation removed to reduce CPU usage
 
   // Fetch documents
   const { data: documents, isLoading } = trpc.documents.list.useQuery();
@@ -150,9 +72,8 @@ export default function CorpusCenter() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-green-950/20 to-gray-950 text-white relative overflow-hidden">
-      {/* Animated background */}
-      <canvas
-        ref={canvasRef}
+      {/* Static gradient background */}
+      <div
         className="absolute inset-0 w-full h-full opacity-30"
         style={{ background: "radial-gradient(circle at 50% 50%, rgba(34, 197, 94, 0.1), transparent 70%)" }}
       />

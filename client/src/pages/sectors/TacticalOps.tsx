@@ -39,83 +39,7 @@ export default function TacticalOps() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [result, setResult] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // War room radar animation
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    let angle = 0;
-
-    const animate = () => {
-      ctx.fillStyle = "rgba(15, 0, 0, 0.1)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Radar sweep
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const radius = Math.min(canvas.width, canvas.height) * 0.4;
-
-      // Radar circles
-      for (let i = 1; i <= 4; i++) {
-        ctx.strokeStyle = `rgba(220, 38, 38, ${0.1 * i})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius * (i / 4), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Radar sweep line
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(angle);
-      const gradient = ctx.createLinearGradient(0, 0, radius, 0);
-      gradient.addColorStop(0, "rgba(220, 38, 38, 0.8)");
-      gradient.addColorStop(1, "rgba(220, 38, 38, 0)");
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(radius, 0);
-      ctx.stroke();
-      ctx.restore();
-
-      // Threat indicators (random blips)
-      for (let i = 0; i < 8; i++) {
-        const blipAngle = (i / 8) * Math.PI * 2;
-        const blipRadius = radius * (0.3 + Math.random() * 0.6);
-        const blipX = centerX + Math.cos(blipAngle) * blipRadius;
-        const blipY = centerY + Math.sin(blipAngle) * blipRadius;
-        
-        ctx.fillStyle = "rgba(220, 38, 38, 0.6)";
-        ctx.beginPath();
-        ctx.arc(blipX, blipY, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Pulsing ring
-        const pulseRadius = 8 + Math.sin(Date.now() / 500 + i) * 3;
-        ctx.strokeStyle = "rgba(220, 38, 38, 0.3)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(blipX, blipY, pulseRadius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      angle += 0.02;
-      requestAnimationFrame(animate);
-    };
-
-    const animationId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationId);
-  }, []);
+  // Canvas animation removed to reduce CPU usage
 
   // Get user's documents from Corpus
   const { data: documents } = trpc.documents.list.useQuery();
@@ -147,8 +71,8 @@ export default function TacticalOps() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* War room radar background */}
-      <canvas ref={canvasRef} className="absolute inset-0 opacity-30" />
+      {/* Static gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 via-black to-red-950/20 opacity-30" />
 
       {/* Scanline effect */}
       <div className="absolute inset-0 pointer-events-none opacity-10"

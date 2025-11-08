@@ -31,57 +31,12 @@ const EVIDENCE_AGENTS = [
 
 export default function EvidenceLab() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Matrix code rain
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const fontSize = 14;
-    const columns = canvas.width / fontSize;
-    const drops: number[] = [];
-
-    for (let i = 0; i < columns; i++) {
-      drops[i] = Math.random() * canvas.height / fontSize;
-    }
-
-    const chars = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-    const animate = () => {
-      ctx.fillStyle = "rgba(0, 20, 0, 0.05)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = "rgba(0, 255, 70, 0.8)";
-      ctx.font = `${fontSize}px monospace`;
-
-      for (let i = 0; i < drops.length; i++) {
-        const text = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-
-        drops[i]++;
-      }
-
-      requestAnimationFrame(animate);
-    };
-
-    const animationId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationId);
-  }, []);
+  // Canvas animation removed to reduce CPU usage
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      <canvas ref={canvasRef} className="absolute inset-0 opacity-20" />
+      {/* Static gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-green-950/20 via-black to-emerald-950/20 opacity-20" />
 
       <header className="border-b border-green-900/30 bg-black/80 backdrop-blur-sm sticky top-0 z-20 relative">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
