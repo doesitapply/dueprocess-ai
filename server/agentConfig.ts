@@ -737,3 +737,25 @@ export function getAllAgentIds(): string[] {
   return AGENTS.map(agent => agent.id);
 }
 
+
+
+/**
+ * Sector to division mapping
+ */
+const SECTOR_TO_DIVISION: Record<string, AgentConfig["division"]> = {
+  tactical: "tactical",
+  legal: "analysis",
+  intel: "research",
+  evidence: "evidence",
+  offensive: "offensive",
+};
+
+/**
+ * Get agents by sector
+ */
+export function getAgentsBySector(sector: "tactical" | "legal" | "intel" | "evidence" | "offensive"): AgentConfig[] {
+  const division = SECTOR_TO_DIVISION[sector];
+  if (!division) return [];
+  return getAgentsByDivision(division);
+}
+

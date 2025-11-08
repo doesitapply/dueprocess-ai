@@ -2,10 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Scale, Gavel, Shield, TrendingUp, Loader2, Sparkles, Zap } from "lucide-react";
+import { ArrowLeft, Scale, Gavel, FileText, Loader2, Sparkles, BookOpen, Zap, Shield, TrendingUp } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { SwarmProcessing } from "@/components/SwarmProcessing";
 
 const ARSENAL_AGENTS = [
   {
@@ -191,8 +192,54 @@ export default function LegalArsenal() {
           </div>
         </div>
 
-        {/* Weapon Selection */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+         {/* Swarm Processing Section */}
+        <Card className="mb-8 bg-gradient-to-br from-purple-950/30 to-violet-950/30 border-2 border-purple-500/50">
+          <CardHeader>
+            <CardTitle className="text-purple-400 font-mono flex items-center gap-2">
+              <Zap className="w-6 h-6 text-violet-500" />
+              LEGAL ANALYSIS SWARM
+            </CardTitle>
+            <CardDescription className="text-purple-400/60">
+              Deploy all legal analysis agents for comprehensive constitutional, criminal, and civil rights analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Document Selector for Swarm */}
+              <div className="space-y-2">
+                <label className="text-purple-400 font-mono text-sm">Select Document from Corpus</label>
+                <select
+                  value={selectedDocumentId ?? ""}
+                  onChange={(e) => setSelectedDocumentId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full p-3 bg-slate-950/50 border border-purple-900/50 rounded text-purple-400 font-mono text-sm"
+                >
+                  <option value="">-- Select a document --</option>
+                  {documents && documents.map((doc: any) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.fileName} ({new Date(doc.createdAt).toLocaleDateString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Swarm Processing Component */}
+              <SwarmProcessing
+                documentId={selectedDocumentId}
+                sector="legal"
+                sectorName="Legal Arsenal"
+                buttonText="DEPLOY LEGAL SWARM"
+                buttonClassName="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-mono tracking-wide text-lg py-4"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Individual Agent Selection */}
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold text-purple-400 font-mono mb-2">OR SELECT INDIVIDUAL AGENT</h2>
+          <p className="text-purple-400/60 text-sm font-mono">Choose a specific legal agent for targeted analysis</p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
           {ARSENAL_AGENTS.map((agent) => (
             <Card
               key={agent.id}

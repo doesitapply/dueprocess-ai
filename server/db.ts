@@ -14,7 +14,13 @@ import {
   Subscription,
   payments,
   InsertPayment,
-  Payment
+  Payment,
+  swarmSessions,
+  InsertSwarmSession,
+  SwarmSession,
+  swarmAgentResults,
+  InsertSwarmAgentResult,
+  SwarmAgentResult
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -225,5 +231,67 @@ export async function updatePaymentStatus(stripeSessionId: string, status: Payme
   if (!db) throw new Error("Database not available");
 
   await db.update(payments).set({ status }).where(eq(payments.stripeSessionId, stripeSessionId));
+}
+
+
+
+// ============================================
+// SWARM PROCESSING HELPERS
+// ============================================
+
+export async function createSwarmSession(session: InsertSwarmSession): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(swarmSessions).values(session);
+  return Number(result[0].insertId);
+}
+
+export async function getSwarmSession(id: number): Promise<SwarmSession | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(swarmSessions).where(eq(swarmSessions.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateSwarmSession(id: number, updates: Partial<SwarmSession>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(swarmSessions).set(updates).where(eq(swarmSessions.id, id));
+}
+
+export async function getUserSwarmSessions(userId: number): Promise<SwarmSession[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(swarmSessions)
+    .where(eq(swarmSessions.userId, userId))
+    .orderBy(desc(swarmSessions.createdAt));
+}
+
+export async function createSwarmAgentResult(result: InsertSwarmAgentResult): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const insertResult = await db.insert(swarmAgentResults).values(result);
+  return Number(insertResult[0].insertId);
+}
+
+export async function updateSwarmAgentResult(id: number, updates: Partial<SwarmAgentResult>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(swarmAgentResults).set(updates).where(eq(swarmAgentResults.id, id));
+}
+
+export async function getSwarmAgentResults(swarmSessionId: number): Promise<SwarmAgentResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(swarmAgentResults)
+    .where(eq(swarmAgentResults.swarmSessionId, swarmSessionId))
+    .orderBy(desc(swarmAgentResults.createdAt));
 }
 

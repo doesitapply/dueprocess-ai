@@ -256,3 +256,40 @@ export const integrationJobs = mysqlTable("integration_jobs", {
 export type IntegrationJob = typeof integrationJobs.$inferSelect;
 export type InsertIntegrationJob = typeof integrationJobs.$inferInsert;
 
+/**
+ * Swarm processing sessions - tracks multi-agent parallel runs
+ */
+export const swarmSessions = mysqlTable("swarm_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  documentId: int("documentId").notNull(),
+  sector: varchar("sector", { length: 50 }).notNull(), // 'tactical', 'legal', 'intel', 'evidence', 'offensive'
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  totalAgents: int("totalAgents").notNull(),
+  completedAgents: int("completedAgents").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type SwarmSession = typeof swarmSessions.$inferSelect;
+export type InsertSwarmSession = typeof swarmSessions.$inferInsert;
+
+/**
+ * Swarm agent results - individual agent outputs within a swarm
+ */
+export const swarmAgentResults = mysqlTable("swarm_agent_results", {
+  id: int("id").autoincrement().primaryKey(),
+  swarmSessionId: int("swarmSessionId").notNull(),
+  agentId: varchar("agentId", { length: 100 }).notNull(),
+  agentName: varchar("agentName", { length: 255 }).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  output: text("output"),
+  error: text("error"),
+  processingTime: int("processingTime"), // milliseconds
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type SwarmAgentResult = typeof swarmAgentResults.$inferSelect;
+export type InsertSwarmAgentResult = typeof swarmAgentResults.$inferInsert;
+

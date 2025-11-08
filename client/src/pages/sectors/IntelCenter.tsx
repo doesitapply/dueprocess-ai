@@ -4,10 +4,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, BookOpen, Scale, FileText, Loader2, Sparkles, ExternalLink, Search, Database, Newspaper } from "lucide-react";
+import { ArrowLeft, BookOpen, Scale, FileText, Loader2, Sparkles, ExternalLink, Search, Database, Newspaper, Zap } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { SwarmProcessing } from "@/components/SwarmProcessing";
 
 const INTEL_AGENTS = [
   {
@@ -192,7 +193,53 @@ export default function IntelCenter() {
               <p className="text-cyan-400/70 font-mono">Case Law • Statutes • Ethics Codes</p>
             </div>
 
-            {/* Agent Selection */}
+            {/* Swarm Processing Section */}
+            <Card className="mb-8 bg-gradient-to-br from-blue-950/30 to-cyan-950/30 border-2 border-blue-500/50">
+              <CardHeader>
+                <CardTitle className="text-blue-400 font-mono flex items-center gap-2">
+                  <Zap className="w-6 h-6 text-cyan-500" />
+                  INTELLIGENCE SWARM DEPLOYMENT
+                </CardTitle>
+                <CardDescription className="text-blue-400/60">
+                  Deploy all research agents for comprehensive legal intelligence gathering and analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Document Selector for Swarm */}
+                  <div className="space-y-2">
+                    <label className="text-blue-400 font-mono text-sm">Select Document from Corpus</label>
+                    <select
+                      value={selectedDocumentId ?? ""}
+                      onChange={(e) => setSelectedDocumentId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full p-3 bg-slate-950/50 border border-blue-900/50 rounded text-blue-400 font-mono text-sm"
+                    >
+                      <option value="">-- Select a document --</option>
+                      {documents && documents.map((doc: any) => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.fileName} ({new Date(doc.createdAt).toLocaleDateString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Swarm Processing Component */}
+                  <SwarmProcessing
+                    documentId={selectedDocumentId}
+                    sector="intel"
+                    sectorName="Intel Center"
+                    buttonText="DEPLOY INTELLIGENCE SWARM"
+                    buttonClassName="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-mono tracking-wide text-lg py-4"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Individual Agent Selection */}
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-cyan-400 font-mono mb-2">OR SELECT INDIVIDUAL AGENT</h2>
+              <p className="text-cyan-400/60 text-sm font-mono">Choose a specific research agent for targeted intelligence gathering</p>
+            </div>
             <div className="grid md:grid-cols-3 gap-6 mb-8">
               {INTEL_AGENTS.map((agent) => (
                 <Card

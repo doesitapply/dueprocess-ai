@@ -4,20 +4,12 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { stripeRouter } from "./stripeRouter";
-import { 
-  createDocument, 
-  getUserDocuments, 
-  getDocumentById, 
-  updateDocumentStatus,
-  createAgentOutput,
-  getAgentOutputByDocumentId,
-  getDb
-} from "./db";
+import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults } from "./db";;
 import { documents, agentOutputs, subscriptions, payments, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
-import { getAgentById } from "./agentConfig";
+import { getAgentById, getAgentsBySector } from "./agentConfig";
 import { fileProcessingRouter } from "./fileProcessing";
 import { reportRouter } from "./reportGenerator";
 import { uploadRouter } from "./uploadRouter";
@@ -119,6 +111,154 @@ export const appRouter = router({
         // Get all agent outputs for this document
         const outputs = await getAgentOutputByDocumentId(documentId);
         return outputs;
+      }),
+
+    /**
+     * Process document with all agents in a sector (swarm processing)
+     */
+    processSwarm: protectedProcedure
+      .input(z.object({
+        documentId: z.number(),
+        sector: z.enum(["tactical", "legal", "intel", "evidence", "offensive"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { documentId, sector } = input;
+        const userId = ctx.user.id;
+
+        // Get the document
+        const document = await getDocumentById(documentId);
+        if (!document || document.userId !== userId) {
+          throw new Error("Document not found or unauthorized");
+        }
+
+        // Get all agents for this sector
+        const sectorAgents = getAgentsBySector(sector);
+        if (sectorAgents.length === 0) {
+          throw new Error("No agents found for this sector");
+        }
+
+        // Create swarm session
+        const swarmSessionId = await createSwarmSession({
+          userId,
+          documentId,
+          sector,
+          status: "processing",
+          totalAgents: sectorAgents.length,
+          completedAgents: 0,
+        });
+
+        // Create agent result placeholders
+        const agentResultIds = await Promise.all(
+          sectorAgents.map((agent: any) =>
+            createSwarmAgentResult({
+              swarmSessionId,
+              agentId: agent.id,
+              agentName: agent.name,
+              status: "pending",
+            })
+          )
+        );
+
+        // Process all agents in parallel
+        const documentContent = document.extractedText || document.summary || "[No text content available]";
+        const userPrompt = `Analyze this document:\n\nFilename: ${document.fileName}\nContent:\n${documentContent}`;
+
+        const processingPromises = sectorAgents.map(async (agent: any, index: number) => {
+          const resultId = agentResultIds[index];
+          const startTime = Date.now();
+
+          try {
+            // Update status to processing
+            await updateSwarmAgentResult(resultId, { status: "processing" });
+
+            // Call LLM
+            const response = await invokeLLM({
+              messages: [
+                { role: "system", content: agent.systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+            });
+
+            const messageContent = response.choices[0]?.message?.content;
+            const output = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent) || "No response generated";
+            const processingTime = Date.now() - startTime;
+
+            // Update with success
+            await updateSwarmAgentResult(resultId, {
+              status: "completed",
+              output,
+              processingTime,
+              completedAt: new Date(),
+            });
+
+            // Also save to agentOutputs for compatibility
+            await createAgentOutput({
+              documentId,
+              agentId: agent.id,
+              agentName: agent.name,
+              output,
+            });
+
+            return { success: true, agentId: agent.id };
+          } catch (error) {
+            const processingTime = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+            // Update with error
+            await updateSwarmAgentResult(resultId, {
+              status: "failed",
+              error: errorMessage,
+              processingTime,
+              completedAt: new Date(),
+            });
+
+            return { success: false, agentId: agent.id, error: errorMessage };
+          }
+        });
+
+        // Wait for all agents to complete
+        const results = await Promise.all(processingPromises);
+        const completedCount = results.filter((r: any) => r.success).length;
+
+        // Update swarm session
+        await updateSwarmSession(swarmSessionId, {
+          status: completedCount === sectorAgents.length ? "completed" : "failed",
+          completedAgents: completedCount,
+          completedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          swarmSessionId,
+          totalAgents: sectorAgents.length,
+          completedAgents: completedCount,
+          results,
+        };
+      }),
+
+    /**
+     * Get swarm session results
+     */
+    getSwarmResults: protectedProcedure
+      .input(z.object({
+        swarmSessionId: z.number(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const { swarmSessionId } = input;
+
+        // Get swarm session
+        const session = await getSwarmSession(swarmSessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          throw new Error("Swarm session not found or unauthorized");
+        }
+
+        // Get all agent results
+        const results = await getSwarmAgentResults(swarmSessionId);
+
+        return {
+          session,
+          results,
+        };
       }),
   }),
 
