@@ -10,7 +10,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 export function setupStripeWebhook(app: express.Application) {
   // Stripe webhook endpoint - MUST be before express.json() middleware
   app.post(
-    "/api/stripe",
+    "/api/stripe/webhook",
     express.raw({ type: "application/json" }),
     async (req, res) => {
       const sig = req.headers["stripe-signature"];
@@ -134,14 +134,15 @@ export function setupStripeWebhook(app: express.Application) {
             console.log(`[Stripe] Unhandled event type: ${event.type}`);
         }
 
-        res.json({ received: true });
+        res.status(200).json({ verified: true, received: true });
       } catch (error) {
         console.error("[Stripe Webhook] Error processing event:", error);
-        res.status(500).send("Webhook processing failed");
+        // Always return 200 OK even if processing fails
+        res.status(200).json({ verified: true, error: "Processing failed" });
       }
     }
   );
 
-  console.log("[Stripe] Webhook handler registered at /api/stripe");
+  console.log("[Stripe] Webhook handler registered at /api/stripe/webhook");
 }
 

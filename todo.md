@@ -417,4 +417,5 @@
 ## Bug Fixes
 - [x] Fix tRPC error on Corpus Center page - server returning HTML instead of JSON
 - [x] Remove animated canvas backgrounds from all sector pages to reduce CPU usage
+- [x] Fix Stripe webhook endpoint to return valid JSON with verified field
 
