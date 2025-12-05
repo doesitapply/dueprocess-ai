@@ -8,24 +8,20 @@ After 200 users are enrolled, you will switch to Phase 2 pricing for all new sub
 
 ---
 
-## Phase 1 Pricing Summary
+## Phase 1 Pricing Summary (AGGRESSIVE MODEL 2.0)
 
 ### Individual Agent Subscriptions
-- **Price:** $79/month per agent
+- **Price:** $179/month per agent
 - **Quantity:** 16 agents available
 - **Documents:** 25 per month per agent
 
 ### Sector Subscriptions
-- **Intel Center:** $199/month (3 agents)
-- **Legal Arsenal:** $199/month (4 agents)
-- **Tactical Ops:** $199/month (3 agents)
-- **Evidence Lab:** $199/month (3 agents)
-- **Offensive Ops:** $199/month (3 agents)
+- **All Sectors:** $449/month (3-4 agents per sector)
 - **Documents:** 100 per month per sector
 
 ### Platform Subscriptions
-- **Pro:** $799/month (all 16 agents + swarm)
-- **Enterprise:** $2,500/month base + $149/user (unlimited)
+- **Pro:** $899/month (all 16 agents + swarm)
+- **Enterprise:** $2,500/month base (unlimited)
 
 ---
 
@@ -40,7 +36,7 @@ For each agent, create a product with the following structure:
 #### 1. Canon Hunter
 - **Name:** Canon Hunter - Judicial Ethics Specialist
 - **Description:** Judicial ethics and professional conduct violations specialist. Identifies violations that pierce judicial immunity. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `canon_hunter`
@@ -50,7 +46,7 @@ For each agent, create a product with the following structure:
 #### 2. Precedent Miner
 - **Name:** Precedent Miner - Case Law Research Specialist
 - **Description:** Case law research and precedent analysis. Finds controlling precedent and circuit splits. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `precedent_miner`
@@ -60,7 +56,7 @@ For each agent, create a product with the following structure:
 #### 3. Statute Scanner
 - **Name:** Statute Scanner - Statutory Law Specialist
 - **Description:** Federal and state statutory law analysis. Identifies immunity abrogation and federal jurisdiction. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `statute_scanner`
@@ -70,7 +66,7 @@ For each agent, create a product with the following structure:
 #### 4. Constitutional Analyst
 - **Name:** Constitutional Analyst - Constitutional Rights Specialist
 - **Description:** All constitutional amendments analysis. Identifies clearly established law for qualified immunity piercing. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `constitutional_analyst`
@@ -80,7 +76,7 @@ For each agent, create a product with the following structure:
 #### 5. Criminal Law Specialist
 - **Name:** Criminal Law Specialist - Brady Violations Expert
 - **Description:** Brady, Giglio, and Napue violation detection. Prosecutorial misconduct and evidence fabrication analysis. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `criminal_law_specialist`
@@ -90,7 +86,7 @@ For each agent, create a product with the following structure:
 #### 6. Civil Rights Expert
 - **Name:** Civil Rights Expert - §1983 Litigation Specialist
 - **Description:** Section 1983 claim construction and qualified immunity piercing. Monell municipal liability analysis. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `civil_rights_expert`
@@ -100,7 +96,7 @@ For each agent, create a product with the following structure:
 #### 7. Appellate Strategist
 - **Name:** Appellate Strategist - Appeals Specialist
 - **Description:** Appellate brief strategy and standard of review analysis. Preservation of error identification. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `appellate_strategist`
@@ -110,7 +106,7 @@ For each agent, create a product with the following structure:
 #### 8. Immunity Piercer
 - **Name:** Immunity Piercer - Immunity Destruction Specialist
 - **Description:** Qualified and absolute immunity destruction. All immunity exceptions and clearly established law research. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `immunity_piercer`
@@ -120,7 +116,7 @@ For each agent, create a product with the following structure:
 #### 9. Abstention Destroyer
 - **Name:** Abstention Destroyer - Younger Abstention Specialist
 - **Description:** Younger abstention bypass and federal jurisdiction preservation. Bad faith prosecution arguments. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `abstention_destroyer`
@@ -130,7 +126,7 @@ For each agent, create a product with the following structure:
 #### 10. Discovery Tactician
 - **Name:** Discovery Tactician - Discovery Warfare Specialist
 - **Description:** Strategic discovery requests and evidence extraction. FOIA strategies and spoliation claims. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `discovery_tactician`
@@ -140,7 +136,7 @@ For each agent, create a product with the following structure:
 #### 11. Pattern Recognition Engine
 - **Name:** Pattern Recognition Engine - Systemic Violation Detector
 - **Description:** Cross-case pattern identification and systemic corruption detection. Monell policy/custom evidence. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `pattern_recognition_engine`
@@ -150,7 +146,7 @@ For each agent, create a product with the following structure:
 #### 12. Timeline Constructor
 - **Name:** Timeline Constructor - Chronological Analysis Specialist
 - **Description:** Detailed timeline construction and causal chain analysis. Event sequencing for litigation. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `timeline_constructor`
@@ -160,7 +156,7 @@ For each agent, create a product with the following structure:
 #### 13. Contradiction Detector
 - **Name:** Contradiction Detector - Impeachment Specialist
 - **Description:** Cross-document contradiction detection and impeachment evidence identification. False statement analysis. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `contradiction_detector`
@@ -170,7 +166,7 @@ For each agent, create a product with the following structure:
 #### 14. Motion Drafter
 - **Name:** Motion Drafter - Court Motion Specialist
 - **Description:** TRO, preliminary injunction, and emergency relief motion drafting. Court-ready with full citations. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `motion_drafter`
@@ -180,7 +176,7 @@ For each agent, create a product with the following structure:
 #### 15. Complaint Constructor
 - **Name:** Complaint Constructor - Federal Complaint Specialist
 - **Description:** Federal complaint drafting (Twombly/Iqbal compliant). Plausibility standard and jurisdictional allegations. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `complaint_constructor`
@@ -190,7 +186,7 @@ For each agent, create a product with the following structure:
 #### 16. Viral Content Generator
 - **Name:** Viral Content Generator - Public Pressure Specialist
 - **Description:** Social media content strategy and press release drafting. Public accountability campaigns. 25 document analyses per month. Founding User pricing locked for life.
-- **Pricing:** $79/month recurring
+- **Pricing:** $179/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `agent_id`: `viral_content_generator`
@@ -204,7 +200,7 @@ For each agent, create a product with the following structure:
 #### 1. Intel Center
 - **Name:** Intel Center - Research Division (Founding User)
 - **Description:** Complete legal research: Canon Hunter, Precedent Miner, Statute Scanner. 100 documents per month. Founding User pricing locked for life.
-- **Pricing:** $199/month recurring
+- **Pricing:** $449/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `sector_id`: `intel_center`
@@ -215,7 +211,7 @@ For each agent, create a product with the following structure:
 #### 2. Legal Arsenal
 - **Name:** Legal Arsenal - Analysis Division (Founding User)
 - **Description:** Full constitutional analysis: Constitutional Analyst, Criminal Law Specialist, Civil Rights Expert, Appellate Strategist. 100 documents per month. Founding User pricing locked for life.
-- **Pricing:** $199/month recurring
+- **Pricing:** $449/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `sector_id`: `legal_arsenal`
@@ -226,7 +222,7 @@ For each agent, create a product with the following structure:
 #### 3. Tactical Ops
 - **Name:** Tactical Ops - Procedural Warfare (Founding User)
 - **Description:** Immunity piercing, abstention bypass, discovery warfare. 100 documents per month. Founding User pricing locked for life.
-- **Pricing:** $199/month recurring
+- **Pricing:** $449/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `sector_id`: `tactical_ops`
@@ -237,7 +233,7 @@ For each agent, create a product with the following structure:
 #### 4. Evidence Lab
 - **Name:** Evidence Lab - Forensic Analysis (Founding User)
 - **Description:** Pattern recognition, timeline construction, contradiction detection. 100 documents per month. Founding User pricing locked for life.
-- **Pricing:** $199/month recurring
+- **Pricing:** $449/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `sector_id`: `evidence_lab`
@@ -248,7 +244,7 @@ For each agent, create a product with the following structure:
 #### 5. Offensive Ops
 - **Name:** Offensive Ops - Litigation Generation (Founding User)
 - **Description:** Motion drafting, complaint construction, viral content generation. 100 documents per month. Founding User pricing locked for life.
-- **Pricing:** $199/month recurring
+- **Pricing:** $449/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `sector_id`: `offensive_ops`
@@ -263,7 +259,7 @@ For each agent, create a product with the following structure:
 #### 1. Pro (Founding User)
 - **Name:** Pro - Full Legal Arsenal (Founding User)
 - **Description:** ALL 16 agents + swarm processing + API access. 500 documents per month. Founding User pricing locked for life.
-- **Pricing:** $799/month recurring
+- **Pricing:** $899/month recurring
 - **Metadata:**
   - `tier`: `founding_user`
   - `plan_id`: `pro`

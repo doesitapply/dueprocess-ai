@@ -39,9 +39,9 @@ While everyone else faces the inevitable price hikes required to maintain this w
 
 ### TERMS OF ENLISTMENT (PHASE 1 PRICING)
 
-- **Per-Agent Command:** $79/month
-- **Sector Command:** $199/month
-- **Full Arsenal (Pro):** $799/month
+- **Per-Agent Command:** $179/month
+- **Sector Command:** $449/month
+- **Full Arsenal (Pro):** $899/month
 - **Division Command (Enterprise):** Starting at $2,500/month
 
 This is not a discount. This is a one-time strategic offering to our first allies.

@@ -1,18 +1,16 @@
 /**
- * DueProcess AI - Phase 1 Founding User Pricing (AGGRESSIVE MODEL 2.0)
+ * DueProcess AI - Phase 1 Founding User Pricing
  * Limited to first 200 users - pricing locked for life
- * 
- * Pricing Philosophy:
- * - We are not competing with software. We are competing with attorney fees.
- * - A single specialist attorney costs $300-500/hour
- * - Our platform provides 16 specialist attorneys working 24/7
- * - Pricing reflects sustainable margins + future compute costs
  */
 
 export type SubscriptionInterval = "month" | "year";
 export type SubscriptionTier = "agent" | "sector" | "pro" | "enterprise";
-export type PricingPhase = "founding_user" | "public_launch" | "market_dominance";
+export type PricingPhase = "founding_user" | "public_launch" | "full_market";
 
+/**
+ * Individual Agent Subscription
+ * Phase 1: $79/month per agent
+ */
 export interface AgentSubscription {
   id: string;
   agentId: string;
@@ -26,6 +24,10 @@ export interface AgentSubscription {
   phase: PricingPhase;
 }
 
+/**
+ * Sector Subscription
+ * Phase 1: $199/month per sector
+ */
 export interface SectorSubscription {
   id: string;
   sectorName: string;
@@ -40,6 +42,9 @@ export interface SectorSubscription {
   phase: PricingPhase;
 }
 
+/**
+ * Platform-Wide Subscription
+ */
 export interface PlatformSubscription {
   id: string;
   tier: "pro" | "enterprise";
@@ -57,11 +62,7 @@ export interface PlatformSubscription {
   phase: PricingPhase;
 }
 
-// ========== PHASE 1: FOUNDING USER PRICING ==========
-// Per-Agent: $179/month
-// Per-Sector: $449/month  
-// Pro: $899/month
-// Enterprise: $2,500/month base
+// ========== PHASE 1: FOUNDING USER PRICING (First 200 Users) ==========
 
 export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
   canon_hunter: {
@@ -69,8 +70,8 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "canon_hunter",
     name: "Canon Hunter",
     description: "Judicial ethics and professional conduct violations specialist",
-    price: 179,
-    priceId: "price_founding_agent_canon_hunter",
+    price: 79,
+    priceId: "price_founding_agent_canon_hunter", // Replace with Stripe Price ID
     interval: "month",
     documentsPerMonth: 25,
     features: [
@@ -87,7 +88,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "precedent_miner",
     name: "Precedent Miner",
     description: "Case law research and precedent analysis specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_precedent_miner",
     interval: "month",
     documentsPerMonth: 25,
@@ -105,7 +106,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "statute_scanner",
     name: "Statute Scanner",
     description: "Federal and state statutory law specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_statute_scanner",
     interval: "month",
     documentsPerMonth: 25,
@@ -123,7 +124,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "constitutional_analyst",
     name: "Constitutional Analyst",
     description: "Constitutional rights violations specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_constitutional_analyst",
     interval: "month",
     documentsPerMonth: 25,
@@ -141,7 +142,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "criminal_law_specialist",
     name: "Criminal Law Specialist",
     description: "Brady violations and prosecutorial misconduct specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_criminal_law_specialist",
     interval: "month",
     documentsPerMonth: 25,
@@ -159,7 +160,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "civil_rights_expert",
     name: "Civil Rights Expert",
     description: "§1983 litigation and qualified immunity specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_civil_rights_expert",
     interval: "month",
     documentsPerMonth: 25,
@@ -177,7 +178,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "appellate_strategist",
     name: "Appellate Strategist",
     description: "Appeals and appellate brief specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_appellate_strategist",
     interval: "month",
     documentsPerMonth: 25,
@@ -195,7 +196,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "immunity_piercer",
     name: "Immunity Piercer",
     description: "Qualified and absolute immunity destruction specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_immunity_piercer",
     interval: "month",
     documentsPerMonth: 25,
@@ -213,7 +214,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "abstention_destroyer",
     name: "Abstention Destroyer",
     description: "Younger abstention bypass specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_abstention_destroyer",
     interval: "month",
     documentsPerMonth: 25,
@@ -231,7 +232,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "discovery_tactician",
     name: "Discovery Tactician",
     description: "Discovery warfare and evidence extraction specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_discovery_tactician",
     interval: "month",
     documentsPerMonth: 25,
@@ -249,7 +250,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "pattern_recognition_engine",
     name: "Pattern Recognition Engine",
     description: "Cross-case pattern and systemic violation detection",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_pattern_recognition",
     interval: "month",
     documentsPerMonth: 25,
@@ -267,7 +268,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "timeline_constructor",
     name: "Timeline Constructor",
     description: "Chronological analysis and causal chain specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_timeline_constructor",
     interval: "month",
     documentsPerMonth: 25,
@@ -285,7 +286,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "contradiction_detector",
     name: "Contradiction Detector",
     description: "Statement inconsistency and impeachment specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_contradiction_detector",
     interval: "month",
     documentsPerMonth: 25,
@@ -303,7 +304,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "motion_drafter",
     name: "Motion Drafter",
     description: "TRO, preliminary injunction, and motion specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_motion_drafter",
     interval: "month",
     documentsPerMonth: 25,
@@ -321,7 +322,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "complaint_constructor",
     name: "Complaint Constructor",
     description: "Federal complaint drafting specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_complaint_constructor",
     interval: "month",
     documentsPerMonth: 25,
@@ -339,7 +340,7 @@ export const AGENT_SUBSCRIPTIONS: Record<string, AgentSubscription> = {
     agentId: "viral_content_generator",
     name: "Viral Content Generator",
     description: "Public pressure campaign and media content specialist",
-    price: 179,
+    price: 79,
     priceId: "price_founding_agent_viral_content_generator",
     interval: "month",
     documentsPerMonth: 25,
@@ -361,7 +362,7 @@ export const SECTOR_SUBSCRIPTIONS: Record<string, SectorSubscription> = {
     agentIds: ["canon_hunter", "precedent_miner", "statute_scanner"],
     name: "Intel Center - Research Division",
     description: "Complete legal research capabilities",
-    price: 449,
+    price: 199,
     priceId: "price_founding_sector_intel_center",
     interval: "month",
     documentsPerMonth: 100,
@@ -386,7 +387,7 @@ export const SECTOR_SUBSCRIPTIONS: Record<string, SectorSubscription> = {
     ],
     name: "Legal Arsenal - Analysis Division",
     description: "Full constitutional and civil rights analysis team",
-    price: 449,
+    price: 199,
     priceId: "price_founding_sector_legal_arsenal",
     interval: "month",
     documentsPerMonth: 100,
@@ -406,7 +407,7 @@ export const SECTOR_SUBSCRIPTIONS: Record<string, SectorSubscription> = {
     agentIds: ["immunity_piercer", "abstention_destroyer", "discovery_tactician"],
     name: "Tactical Ops - Procedural Warfare",
     description: "Immunity piercing, abstention bypass, and discovery warfare",
-    price: 449,
+    price: 199,
     priceId: "price_founding_sector_tactical_ops",
     interval: "month",
     documentsPerMonth: 100,
@@ -430,7 +431,7 @@ export const SECTOR_SUBSCRIPTIONS: Record<string, SectorSubscription> = {
     ],
     name: "Evidence Lab - Forensic Analysis",
     description: "Pattern recognition, timeline construction, and contradiction detection",
-    price: 449,
+    price: 199,
     priceId: "price_founding_sector_evidence_lab",
     interval: "month",
     documentsPerMonth: 100,
@@ -454,7 +455,7 @@ export const SECTOR_SUBSCRIPTIONS: Record<string, SectorSubscription> = {
     ],
     name: "Offensive Ops - Litigation Generation",
     description: "Court-ready motions, federal complaints, and public pressure campaigns",
-    price: 449,
+    price: 199,
     priceId: "price_founding_sector_offensive_ops",
     interval: "month",
     documentsPerMonth: 100,
@@ -476,7 +477,7 @@ export const PLATFORM_SUBSCRIPTIONS: Record<string, PlatformSubscription> = {
     tier: "pro",
     name: "Pro - Full Legal Arsenal (Founding User)",
     description: "Complete access to all 16 specialized legal agents and swarm processing",
-    price: 899,
+    price: 799,
     priceId: "price_founding_pro",
     interval: "month",
     documentsPerMonth: 500,
