@@ -138,6 +138,52 @@ Agent outputs display in markdown format with copy-to-clipboard functionality. U
 
 ---
 
+## Pricing
+
+DueProcess AI offers flexible pricing tiers designed to provide elite legal expertise at a fraction of traditional attorney costs. The platform recognizes that pro se litigants, activists, and small organizations face institutional corruption with limited resources, and prices accordingly.
+
+### Tier 1: Individual Agent Subscriptions
+
+For focused legal work in a specific area, subscribe to individual specialist agents at **$49 per month per agent**. Each subscription includes 25 document analyses per month with that agent. This tier is ideal for solo practitioners, activists with specific needs, or users exploring the platform before committing to larger subscriptions.
+
+All 16 specialized agents are available individually, including Canon Hunter for judicial ethics violations, Precedent Miner for case law research, Constitutional Analyst for constitutional rights violations, Immunity Piercer for qualified immunity destruction, Pattern Recognition Engine for systemic violation detection, Motion Drafter for court-ready motions, and ten additional specialists covering every aspect of civil rights litigation.
+
+The value proposition is clear: a single specialist attorney charges $300-500 per hour, while an AI agent provides unlimited consultation and analysis for $49 per month.
+
+### Tier 2: Sector Subscriptions
+
+For comprehensive work within a legal domain, sector subscriptions provide access to all agents in one division at **$129-179 per month**. Each sector includes 100 document analyses per month across all agents in that sector.
+
+**Intel Center** ($129/month) provides complete legal research capabilities with three agents: Canon Hunter for ethics violations, Precedent Miner for case law, and Statute Scanner for federal and state statutes. **Legal Arsenal** ($179/month) delivers full constitutional and civil rights analysis with four agents covering all constitutional amendments, Brady violations, §1983 claims, and appellate strategy. **Tactical Ops** ($149/month) focuses on procedural warfare with Immunity Piercer, Abstention Destroyer, and Discovery Tactician. **Evidence Lab** ($149/month) performs forensic analysis through Pattern Recognition Engine, Timeline Constructor, and Contradiction Detector. **Offensive Ops** ($149/month) generates litigation documents with Motion Drafter, Complaint Constructor, and Viral Content Generator.
+
+Sector subscriptions provide the equivalent of an entire legal department specializing in one practice area, at less than the cost of a single hour with a specialist attorney.
+
+### Tier 3: Pro Subscription
+
+The **Pro subscription** at **$499 per month** provides complete access to all 16 specialized agents plus swarm processing capabilities. This tier includes 500 document analyses per month, priority processing, API access, and the Corpus Center document management system.
+
+Swarm processing enables simultaneous deployment of multiple agents against the same evidence, generating comprehensive multi-agent reports that would require dozens of hours of manual legal research. The Pro subscription is designed for pro se litigants with major cases, small law firms, and civil rights organizations that need comprehensive legal analysis across multiple domains.
+
+At $499 per month, the Pro subscription costs less than two hours of attorney time while providing an entire team of 16 elite specialists working in parallel.
+
+### Tier 4: Enterprise Subscription
+
+The **Enterprise subscription** at **$1,499 per month** provides unlimited document analyses, white-label options, custom agent training, dedicated 24/7 support, team collaboration features, and custom integrations. This tier is designed for organizations, law firms, and high-volume users who need unrestricted access to the platform.
+
+Enterprise subscribers receive priority API access, advanced analytics dashboards, and the ability to customize agents for their specific litigation strategies and jurisdictions.
+
+### Pricing Philosophy
+
+DueProcess AI does not compete with legal research platforms like LexisNexis or Westlaw. The platform competes with attorney fees, which range from $300-500 per hour for specialists. A typical civil rights case requiring immunity piercing, constitutional analysis, pattern recognition, and motion drafting would cost $50,000-100,000 in attorney fees. The Pro subscription provides equivalent capabilities for $499 per month.
+
+The pricing structure enables users to start small with a single agent and scale up as their needs grow. There is no mixing and matching between tiers—users subscribe to one agent, one sector, or the full platform. This clarity prevents decision paralysis and ensures users understand exactly what they are purchasing.
+
+### Free Trial and Guarantees
+
+All new users receive a 14-day free trial of the Pro subscription to explore all agents and capabilities. No credit card is required for the trial. Users can cancel at any time with no penalties or fees. The platform provides a 30-day money-back guarantee for all subscriptions—if the analysis does not meet expectations, users receive a full refund.
+
+---
+
 ## Deployment
 
 ### Manus Platform Deployment
