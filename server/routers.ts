@@ -8,7 +8,6 @@ import { stripeRouter } from "./stripeRouter";
 import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, getAgentOutputsByDocumentIds, deleteAgentOutputById, deleteAgentOutputsByDocumentIds, deleteAnalysisArtifactsForDocuments, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults, createAgentRun, updateAgentRun, createAgentFinding, updateAgentFinding, createAgentFindingAudit, createLlmUsageEvent, getAgentFindingsByUserId } from "./db";;
 import { documents, agentOutputs, subscriptions, payments, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 import type { AgentConfig } from "./agentConfig";
 import { AGENTS, getAgentById, getAgentsBySector } from "./agentConfig";
@@ -833,7 +832,7 @@ export const appRouter = router({
   }),
 
   documents: router({
-    // Upload a document
+    // Legacy upload endpoint kept only to avoid silent creation of unprocessed evidence.
     upload: protectedProcedure
       .input(z.object({
         fileName: z.string(),
@@ -841,27 +840,8 @@ export const appRouter = router({
         mimeType: z.string(),
         fileSize: z.number(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        await enforceDocumentUploadLimit(ctx.user);
-        // Upload to S3
-        const buffer = Buffer.from(input.fileContent, 'base64');
-        const randomSuffix = Math.random().toString(36).substring(7);
-        const fileKey = `${ctx.user.id}-documents/${input.fileName}-${randomSuffix}`;
-        
-        const { url } = await storagePut(fileKey, buffer, input.mimeType);
-
-        // Create document record
-        const document = await createDocument({
-          userId: ctx.user.id,
-          fileName: input.fileName,
-          fileUrl: url,
-          fileKey,
-          mimeType: input.mimeType,
-          fileSize: input.fileSize,
-          status: "pending",
-        });
-
-        return document;
+      .mutation(async () => {
+        throw new Error("Legacy document upload is disabled. Use upload.uploadFile so extraction, source hashing, duplicate detection, and readiness checks run before evidence reaches analysis.");
       }),
 
     // Get user's documents
