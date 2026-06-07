@@ -41,6 +41,13 @@ type AgentOutputRecord = typeof agentOutputs.$inferSelect;
 type AgentFindingRecord = typeof agentFindings.$inferSelect;
 type GeneratedReportRecord = Awaited<ReturnType<typeof getGeneratedReportById>>;
 
+type ReportPreflightInput = {
+  findings: AgentFindingRecord[];
+  legacyAgentOutputsIncluded: boolean;
+  selectedFindingIds?: number[];
+  minConfidence?: number;
+};
+
 function truncateForColumn(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
@@ -222,6 +229,26 @@ function findingText(finding: AgentFindingRecord): string {
     authorities.length > 0 ? `Authorities: ${authorities.join("; ")}` : "",
     finding.nextAction ? `Next action: ${finding.nextAction}` : "",
   ].filter(Boolean).join("\n");
+}
+
+export function reportPreflightError(input: ReportPreflightInput): string | null {
+  if (input.findings.length > 0) return null;
+  if (input.legacyAgentOutputsIncluded) return null;
+
+  const reasons = [
+    input.selectedFindingIds && input.selectedFindingIds.length > 0
+      ? "the selected finding filter did not include any report-ready findings"
+      : null,
+    input.minConfidence && input.minConfidence > 0
+      ? `the minimum confidence filter is ${input.minConfidence}`
+      : null,
+  ].filter(Boolean);
+
+  return [
+    "No report-ready structured findings match this report scope.",
+    reasons.length > 0 ? `Likely cause: ${reasons.join(" and ")}.` : null,
+    "Run the Leverage Engine on the selected records, wait for QC to clear findings, lower the confidence threshold, or clear the selected-finding filter before generating a court-safe report.",
+  ].filter(Boolean).join(" ");
 }
 
 export function buildPlainReport(data: {
@@ -410,13 +437,25 @@ export const reportRouter = router({
       const legacyAgentOutputsIncluded = ctx.user.role === "admin" && input.includeLegacyAgentOutputs;
       const blockedFindingsIncluded = ctx.user.role === "admin" && input.includeBlockedFindings;
       const outputsForReport = legacyAgentOutputsIncluded ? outputs : [];
-      const findings = await getFindingsForScope({
+      const previewFindings = await getFindingsForScope({
         userId: ctx.user.id,
         documentIds: selectedDocuments.map((document) => document.id),
-        selectedFindingIds: input.selectedFindingIds,
         minConfidence: input.minConfidence,
         includeBlockedFindings: blockedFindingsIncluded,
       });
+      const selectedFindingIdSet = new Set(input.selectedFindingIds ?? []);
+      const reportFindings = selectedFindingIdSet.size > 0
+        ? previewFindings.filter((finding) => selectedFindingIdSet.has(finding.id))
+        : previewFindings;
+      const preflightError = reportPreflightError({
+        findings: reportFindings,
+        legacyAgentOutputsIncluded,
+        selectedFindingIds: input.selectedFindingIds,
+        minConfidence: input.minConfidence,
+      });
+      if (preflightError) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: preflightError });
+      }
       const evidenceDigest = selectedDocuments
         .map((document, index) => `DOCUMENT ${index + 1}\n${reportSourceDigest(document, legacyAgentOutputsIncluded)}`)
         .join("\n\n---\n\n")
@@ -511,7 +550,7 @@ export const reportRouter = router({
           legacyAgentOutputsIncluded,
           legacyAgentOutputsAvailable: outputs.length,
         },
-        findings: findings.map((finding) => ({
+        findings: previewFindings.map((finding) => ({
           id: finding.id,
           title: finding.title,
           agentName: finding.agentName,
@@ -656,6 +695,10 @@ export const reportRouter = router({
         documentIds: z.array(z.number()).optional(),
         fromDate: z.string().optional(),
         toDate: z.string().optional(),
+        selectedFindingIds: z.array(z.number()).optional(),
+        minConfidence: z.number().min(0).max(100).default(0),
+        includeBlockedFindings: z.boolean().default(false),
+        includeLegacyAgentOutputs: z.boolean().default(false),
       })
     )
     .query(async ({ input, ctx }) => {
@@ -668,9 +711,29 @@ export const reportRouter = router({
         toDate: input.toDate,
       });
       const outputs = await getOutputsForDocuments(selectedDocuments.map((document) => document.id));
-      const findings = await getFindingsForScope({
+      const allFindingsInScope = await getFindingsForScope({
         userId: ctx.user.id,
         documentIds: selectedDocuments.map((document) => document.id),
+        includeBlockedFindings: true,
+      });
+      const blockedFindingsInScope = allFindingsInScope.filter((finding) => !isReportEligible(finding.qcStatus) || !finding.includedInReports);
+      const blockedFindingsIncluded = ctx.user.role === "admin" && input.includeBlockedFindings;
+      const legacyAgentOutputsIncluded = ctx.user.role === "admin" && input.includeLegacyAgentOutputs;
+      const previewFindings = await getFindingsForScope({
+        userId: ctx.user.id,
+        documentIds: selectedDocuments.map((document) => document.id),
+        minConfidence: input.minConfidence,
+        includeBlockedFindings: blockedFindingsIncluded,
+      });
+      const selectedFindingIdSet = new Set(input.selectedFindingIds ?? []);
+      const reportFindings = selectedFindingIdSet.size > 0
+        ? previewFindings.filter((finding) => selectedFindingIdSet.has(finding.id))
+        : previewFindings;
+      const preflightError = reportPreflightError({
+        findings: reportFindings,
+        legacyAgentOutputsIncluded,
+        selectedFindingIds: input.selectedFindingIds,
+        minConfidence: input.minConfidence,
       });
 
       return {
@@ -692,7 +755,7 @@ export const reportRouter = router({
           excerpt: outputText(output).slice(0, 600),
           createdAt: output.createdAt,
         })),
-        findings: findings.map((finding) => ({
+        findings: previewFindings.map((finding) => ({
           id: finding.id,
           title: finding.title,
           agentName: finding.agentName,
@@ -706,8 +769,13 @@ export const reportRouter = router({
           documents: selectedDocuments.length,
           readyDocuments: selectedDocuments.filter(isDocumentReadyForAnalysis).length,
           savedAgentOutputs: outputs.length,
-          structuredFindings: findings.length,
+          structuredFindings: previewFindings.length,
+          allStructuredFindingsInScope: allFindingsInScope.length,
+          blockedFindingsInScope: blockedFindingsInScope.length,
+          reportReadyFindings: reportFindings.length,
           legacyAgentOutputsIncludedByDefault: false,
+          preflightPassed: !preflightError,
+          preflightMessage: preflightError,
         },
       };
     }),

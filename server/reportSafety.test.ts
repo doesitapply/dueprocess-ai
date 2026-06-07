@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentFinding, AgentOutput, Document } from "../drizzle/schema";
-import { buildPlainReport } from "./reportGenerator";
+import { buildPlainReport, reportPreflightError } from "./reportGenerator";
 
 const now = new Date("2026-06-07T12:00:00.000Z");
 
@@ -104,5 +104,25 @@ describe("report safety", () => {
 
     expect(content).toContain("Legacy Brainstorm Agent");
     expect(content).toContain("UNSUPPORTED SECRET CONSPIRACY CLAIM SHOULD NOT LEAK");
+  });
+
+  it("blocks default generation when no report-ready findings match", () => {
+    const error = reportPreflightError({
+      findings: [],
+      legacyAgentOutputsIncluded: false,
+      selectedFindingIds: [999],
+      minConfidence: 95,
+    });
+
+    expect(error).toContain("No report-ready structured findings");
+    expect(error).toContain("selected finding filter");
+    expect(error).toContain("minimum confidence filter is 95");
+  });
+
+  it("allows an explicit admin legacy-output override to pass preflight", () => {
+    expect(reportPreflightError({
+      findings: [],
+      legacyAgentOutputsIncluded: true,
+    })).toBeNull();
   });
 });

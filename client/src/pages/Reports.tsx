@@ -240,12 +240,24 @@ export default function Reports() {
       documentIds: scope === "files" ? selectedDocumentIds : undefined,
       fromDate: fromDate || undefined,
       toDate: toDate || undefined,
+      selectedFindingIds: selectedFindingIds.length > 0 ? selectedFindingIds : undefined,
+      minConfidence,
+      includeBlockedFindings: isAdmin && includeBlockedFindings,
+      includeLegacyAgentOutputs: isAdmin && includeLegacyAgentOutputs,
     },
     {
       enabled: scope !== "files" || selectedDocumentIds.length > 0,
       retry: false,
     }
   );
+  const previewStats = previewQuery.data?.statistics;
+  const preflightPassed = Boolean(previewStats?.preflightPassed);
+  const preflightMessage = previewStats?.preflightMessage ?? "";
+  const generateDisabled =
+    generateReport.isPending ||
+    documentsQuery.isLoading ||
+    previewQuery.isLoading ||
+    (scope !== "files" || selectedDocumentIds.length > 0 ? !preflightPassed : false);
 
   const generateReport = trpc.reports.generate.useMutation({
     onSuccess: (data) => {
@@ -302,6 +314,10 @@ export default function Reports() {
     }
     if (scope === "time" && !fromDate && !toDate) {
       toast.error("Choose a start date, end date, or both.");
+      return;
+    }
+    if (previewQuery.data && !previewQuery.data.statistics.preflightPassed) {
+      toast.error(previewQuery.data.statistics.preflightMessage || "Run analysis and QC before generating this report.");
       return;
     }
 
@@ -599,7 +615,7 @@ export default function Reports() {
 
                 <Button
                   onClick={handleGenerate}
-                  disabled={generateReport.isPending || documentsQuery.isLoading}
+                  disabled={generateDisabled}
                   className="h-12 w-full bg-[#1F6FEB] text-base hover:bg-[#388BFD]"
                 >
                   {generateReport.isPending ? (
@@ -614,6 +630,11 @@ export default function Reports() {
                     </>
                   )}
                 </Button>
+                {previewQuery.data && !previewQuery.data.statistics.preflightPassed && (
+                  <div className="rounded-md border border-[#D29922]/40 bg-[#D29922]/10 p-3 text-sm leading-6 text-[#E3B341]">
+                    {preflightMessage || "Run the Leverage Engine and wait for QC-cleared findings before generating a report."}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -761,10 +782,19 @@ export default function Reports() {
                         <p className="mt-1 text-[10px] uppercase tracking-wide text-[#8B949E]">excluded by default</p>
                       </div>
                       <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
-                        <p className="text-xs text-[#8B949E]">Findings</p>
-                        <p className="mt-1 text-xl font-semibold text-[#D29922]">{previewQuery.data.statistics.structuredFindings}</p>
+                        <p className="text-xs text-[#8B949E]">Report-ready</p>
+                        <p className="mt-1 text-xl font-semibold text-[#D29922]">{previewQuery.data.statistics.reportReadyFindings}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wide text-[#8B949E]">
+                          {previewQuery.data.statistics.structuredFindings} visible
+                        </p>
                       </div>
                     </div>
+
+                    {!previewQuery.data.statistics.preflightPassed && (
+                      <div className="rounded-md border border-[#D29922]/40 bg-[#D29922]/10 p-3 text-sm leading-6 text-[#E3B341]">
+                        {previewQuery.data.statistics.preflightMessage}
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       {previewQuery.data.documents.slice(0, 5).map((document) => (
