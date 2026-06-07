@@ -5,7 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { stripeRouter } from "./stripeRouter";
-import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, getAgentOutputsByDocumentIds, deleteAgentOutputById, deleteAgentOutputsByDocumentIds, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults, createAgentRun, updateAgentRun, createAgentFinding, updateAgentFinding, createAgentFindingAudit, createLlmUsageEvent, getAgentFindingsByUserId } from "./db";;
+import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, getAgentOutputsByDocumentIds, deleteAgentOutputById, deleteAgentOutputsByDocumentIds, deleteAnalysisArtifactsForDocuments, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults, createAgentRun, updateAgentRun, createAgentFinding, updateAgentFinding, createAgentFindingAudit, createLlmUsageEvent, getAgentFindingsByUserId } from "./db";;
 import { documents, agentOutputs, subscriptions, payments, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
@@ -1043,8 +1043,7 @@ Do not produce satire, marketing ideas, social content, product ideas, or generi
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        // Delete agent outputs first
-        await db.delete(agentOutputs).where(eq(agentOutputs.documentId, input.id));
+        await deleteAnalysisArtifactsForDocuments(ctx.user.id, [input.id]);
         
         // Delete document
         await db.delete(documents).where(eq(documents.id, input.id));
@@ -1057,11 +1056,9 @@ Do not produce satire, marketing ideas, social content, product ideas, or generi
       const userDocs = await getUserDocuments(ctx.user.id);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const documentIds = userDocs.map((doc) => doc.id);
 
-      // Delete all agent outputs for user's documents
-      for (const doc of userDocs) {
-        await db.delete(agentOutputs).where(eq(agentOutputs.documentId, doc.id));
-      }
+      await deleteAnalysisArtifactsForDocuments(ctx.user.id, documentIds);
 
       // Delete all documents
       await db.delete(documents).where(eq(documents.userId, ctx.user.id));

@@ -4,6 +4,7 @@ import { inArray } from "drizzle-orm";
 import type { TrpcContext } from "./_core/context";
 import { appRouter } from "./routers";
 import {
+  createAgentFindingAudit,
   createAgentFinding,
   createAgentOutput,
   createAgentRun,
@@ -37,6 +38,8 @@ type TestFixture = {
   runBId: number;
   findingAId: number;
   findingBId: number;
+  auditAId: number;
+  auditBId: number;
   userA: User;
   userB: User;
   userOpenIds: string[];
@@ -162,6 +165,20 @@ async function createFixture(): Promise<TestFixture> {
     qcStatus: "approved",
     includedInReports: 1,
   });
+  const auditA = await createAgentFindingAudit({
+    findingId: findingA.id,
+    runId: runA.id,
+    status: "approved",
+    confidence: 99,
+    issues: JSON.stringify([]),
+  });
+  const auditB = await createAgentFindingAudit({
+    findingId: findingB.id,
+    runId: runB.id,
+    status: "approved",
+    confidence: 99,
+    issues: JSON.stringify([]),
+  });
   const reportA = await createGeneratedReport({
     userId: userA.id,
     title: "Private User A report",
@@ -202,6 +219,8 @@ async function createFixture(): Promise<TestFixture> {
     runBId: runB.id,
     findingAId: findingA.id,
     findingBId: findingB.id,
+    auditAId: auditA.id,
+    auditBId: auditB.id,
     userA,
     userB,
     userOpenIds: [userA.openId, userB.openId],
@@ -303,5 +322,44 @@ describeWithDb("cross-user isolation", () => {
     expect(preview.documents).toHaveLength(0);
     expect(preview.outputs).toHaveLength(0);
     expect(preview.findings).toHaveLength(0);
+  });
+
+  it("deletes source-bound analysis artifacts for the owner without touching another user", async () => {
+    if (!fixture) throw new Error("Fixture missing");
+    const callerA = appRouter.createCaller(createContext(fixture.userA));
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    await callerA.documents.delete({ id: fixture.documentAId });
+
+    const [
+      remainingDocuments,
+      remainingOutputs,
+      remainingRuns,
+      remainingFindings,
+      remainingAudits,
+      remainingReports,
+    ] = await Promise.all([
+      db.select().from(documents).where(inArray(documents.id, [fixture.documentAId, fixture.documentBId])),
+      db.select().from(agentOutputs).where(inArray(agentOutputs.id, [fixture.outputAId, fixture.outputBId])),
+      db.select().from(agentRuns).where(inArray(agentRuns.id, [fixture.runAId, fixture.runBId])),
+      db.select().from(agentFindings).where(inArray(agentFindings.id, [fixture.findingAId, fixture.findingBId])),
+      db.select().from(agentFindingAudits).where(inArray(agentFindingAudits.id, [fixture.auditAId, fixture.auditBId])),
+      db.select().from(generatedReports).where(inArray(generatedReports.id, [fixture.reportAId, fixture.reportBId])),
+    ]);
+
+    expect(remainingDocuments.map((document) => document.id)).not.toContain(fixture.documentAId);
+    expect(remainingOutputs.map((output) => output.id)).not.toContain(fixture.outputAId);
+    expect(remainingRuns.map((run) => run.id)).not.toContain(fixture.runAId);
+    expect(remainingFindings.map((finding) => finding.id)).not.toContain(fixture.findingAId);
+    expect(remainingAudits.map((audit) => audit.id)).not.toContain(fixture.auditAId);
+    expect(remainingReports.map((report) => report.id)).not.toContain(fixture.reportAId);
+
+    expect(remainingDocuments.map((document) => document.id)).toContain(fixture.documentBId);
+    expect(remainingOutputs.map((output) => output.id)).toContain(fixture.outputBId);
+    expect(remainingRuns.map((run) => run.id)).toContain(fixture.runBId);
+    expect(remainingFindings.map((finding) => finding.id)).toContain(fixture.findingBId);
+    expect(remainingAudits.map((audit) => audit.id)).toContain(fixture.auditBId);
+    expect(remainingReports.map((report) => report.id)).toContain(fixture.reportBId);
   });
 });

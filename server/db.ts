@@ -321,6 +321,117 @@ export async function deleteGeneratedReportById(id: number, userId: number): Pro
   await db.delete(generatedReports).where(and(eq(generatedReports.id, id), eq(generatedReports.userId, userId)));
 }
 
+function safeNumberArray(value: string | null | undefined): number[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item) && item > 0);
+  } catch {
+    return [];
+  }
+}
+
+function sourceAnchorsReferenceDocuments(value: string | null | undefined, documentIds: Set<number>): boolean {
+  if (!value) return false;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return false;
+    return parsed.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      return documentIds.has(Number((item as Record<string, unknown>).documentId));
+    });
+  } catch {
+    return false;
+  }
+}
+
+function intersectsDocumentSet(values: number[], documentIds: Set<number>): boolean {
+  return values.some((value) => documentIds.has(value));
+}
+
+export async function deleteAnalysisArtifactsForDocuments(userId: number, documentIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const uniqueDocumentIds = Array.from(new Set(documentIds.filter((id) => Number.isInteger(id) && id > 0)));
+  if (uniqueDocumentIds.length === 0) {
+    return {
+      agentFindingAudits: 0,
+      agentFindings: 0,
+      generatedReports: 0,
+      agentOutputs: 0,
+      agentRuns: 0,
+    };
+  }
+
+  const documentIdSet = new Set(uniqueDocumentIds);
+  const [userRuns, userFindings, userReports, documentOutputs] = await Promise.all([
+    db.select().from(agentRuns).where(eq(agentRuns.userId, userId)),
+    db.select().from(agentFindings).where(eq(agentFindings.userId, userId)),
+    db.select().from(generatedReports).where(eq(generatedReports.userId, userId)),
+    db.select().from(agentOutputs).where(inArray(agentOutputs.documentId, uniqueDocumentIds)),
+  ]);
+
+  const affectedRunIds = new Set(
+    userRuns
+      .filter((run) => documentIdSet.has(run.anchorDocumentId) || intersectsDocumentSet(safeNumberArray(run.documentIds), documentIdSet))
+      .map((run) => run.id)
+  );
+  const affectedOutputIds = new Set(documentOutputs.map((output) => output.id));
+  const affectedFindingIds = new Set(
+    userFindings
+      .filter((finding) => (
+        affectedRunIds.has(finding.runId) ||
+        (finding.outputId ? affectedOutputIds.has(finding.outputId) : false) ||
+        sourceAnchorsReferenceDocuments(finding.sourceAnchors, documentIdSet)
+      ))
+      .map((finding) => finding.id)
+  );
+  userFindings.forEach((finding) => {
+    if (finding.outputId && affectedFindingIds.has(finding.id)) {
+      affectedOutputIds.add(finding.outputId);
+    }
+  });
+
+  const affectedReportIds = userReports
+    .filter((report) => (
+      intersectsDocumentSet(safeNumberArray(report.documentIds), documentIdSet) ||
+      safeNumberArray(report.selectedFindingIds).some((findingId) => affectedFindingIds.has(findingId))
+    ))
+    .map((report) => report.id);
+
+  const counts = {
+    agentFindingAudits: 0,
+    agentFindings: affectedFindingIds.size,
+    generatedReports: affectedReportIds.length,
+    agentOutputs: affectedOutputIds.size,
+    agentRuns: affectedRunIds.size,
+  };
+
+  const affectedFindingIdList = Array.from(affectedFindingIds);
+  if (affectedFindingIdList.length > 0) {
+    await db.delete(agentFindingAudits).where(inArray(agentFindingAudits.findingId, affectedFindingIdList));
+    counts.agentFindingAudits = affectedFindingIdList.length;
+    await db.delete(agentFindings).where(inArray(agentFindings.id, affectedFindingIdList));
+  }
+  if (affectedReportIds.length > 0) {
+    await db.delete(generatedReports).where(inArray(generatedReports.id, affectedReportIds));
+  }
+  const affectedOutputIdList = Array.from(affectedOutputIds);
+  if (affectedOutputIdList.length > 0) {
+    await db.delete(agentOutputs).where(inArray(agentOutputs.id, affectedOutputIdList));
+  }
+  const affectedRunIdList = Array.from(affectedRunIds);
+  if (affectedRunIdList.length > 0) {
+    await db.delete(agentRuns).where(inArray(agentRuns.id, affectedRunIdList));
+  }
+
+  return counts;
+}
+
 // Subscription queries
 export async function getSubscriptionByUserId(userId: number): Promise<Subscription | undefined> {
   const db = await getDb();
