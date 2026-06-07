@@ -30,8 +30,10 @@ export const protectedProcedure = t.procedure.use(requireUser);
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
+    const isConfiguredOwner =
+      Boolean(process.env.OWNER_OPEN_ID) && ctx.user?.openId === process.env.OWNER_OPEN_ID;
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
+    if (!ctx.user || ctx.user.role !== 'admin' || !isConfiguredOwner) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 

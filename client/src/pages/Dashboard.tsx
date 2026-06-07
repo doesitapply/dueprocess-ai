@@ -2,173 +2,109 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { Target, Brain, Scale, Microscope, Rocket, Network, Settings as SettingsIcon, Loader2, Zap, Database } from "lucide-react";
-import { useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { Database, FileText, Loader2, Scale, Settings as SettingsIcon, Upload } from "lucide-react";
+import { Link } from "wouter";
 
-interface Sector {
-  id: string;
-  name: string;
+type WorkspaceItem = {
+  title: string;
   description: string;
-  icon: React.ReactNode;
   route: string;
-  color: string;
-  glowColor: string;
-}
+  icon: React.ReactNode;
+};
 
-const SECTORS: Sector[] = [
+type GaugeItem = {
+  title: string;
+  value: number;
+  loading: boolean;
+  route: string;
+  tone: string;
+};
+
+const WORKSPACE_ITEMS: WorkspaceItem[] = [
   {
-    id: "corpus",
-    name: "CORPUS CENTER",
-    description: "Central evidence database - all sectors pull from here",
-    icon: <Database className="w-12 h-12" />,
+    title: "Evidence Corpus",
+    description: "Review uploaded records and extracted text.",
     route: "/sector/corpus",
-    color: "from-green-900/20 to-slate-900/50",
-    glowColor: "green-500"
+    icon: <Database className="h-6 w-6" />,
   },
   {
-    id: "tactical",
-    name: "TACTICAL OPS",
-    description: "Immunity piercing, abstention destruction, discovery warfare",
-    icon: <Target className="w-12 h-12" />,
-    route: "/sector/tactical",
-    color: "from-red-900/20 to-slate-900/50",
-    glowColor: "red-500"
-  },
-  {
-    id: "intel",
-    name: "INTEL CENTER",
-    description: "Case law research, statute scanning, ethics code hunting",
-    icon: <Brain className="w-12 h-12" />,
-    route: "/sector/intel",
-    color: "from-cyan-900/20 to-slate-900/50",
-    glowColor: "cyan-500"
-  },
-  {
-    id: "arsenal",
-    name: "LEGAL ARSENAL",
-    description: "Constitutional analysis, criminal law, civil rights claims",
-    icon: <Scale className="w-12 h-12" />,
+    title: "Legal Analysis",
+    description: "Run specialized constitutional and procedural analysis.",
     route: "/sector/arsenal",
-    color: "from-purple-900/20 to-slate-900/50",
-    glowColor: "purple-500"
+    icon: <Scale className="h-6 w-6" />,
   },
   {
-    id: "evidence",
-    name: "EVIDENCE LAB",
-    description: "Pattern recognition, timeline construction, contradiction detection",
-    icon: <Microscope className="w-12 h-12" />,
+    title: "Evidence Review",
+    description: "Inspect patterns, timelines, and contradictions.",
     route: "/sector/evidence",
-    color: "from-green-900/20 to-slate-900/50",
-    glowColor: "green-500"
+    icon: <FileText className="h-6 w-6" />,
   },
   {
-    id: "offensive",
-    name: "OFFENSIVE OPS",
-    description: "Motion drafting, complaint construction, viral content generation",
-    icon: <Rocket className="w-12 h-12" />,
-    route: "/sector/offensive",
-    color: "from-orange-900/20 to-slate-900/50",
-    glowColor: "orange-500"
-  },
-  {
-    id: "integrations",
-    name: "INTEGRATIONS HUB",
-    description: "API connectors, webhooks, data sync, export tools",
-    icon: <Network className="w-12 h-12" />,
-    route: "/sector/integrations",
-    color: "from-blue-900/20 to-slate-900/50",
-    glowColor: "blue-500"
+    title: "Reports",
+    description: "Generate concise reports from completed analyses.",
+    route: "/reports",
+    icon: <FileText className="h-6 w-6" />,
   },
 ];
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const [, setLocation] = useLocation();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { data: documents = [], isLoading: documentsLoading } = trpc.documents.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
-  // Animated network background
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const nodes: { x: number; y: number; vx: number; vy: number }[] = [];
-    
-    for (let i = 0; i < 40; i++) {
-      nodes.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3
-      });
-    }
-
-    const animate = () => {
-      ctx.fillStyle = "rgba(2, 6, 23, 0.1)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      nodes.forEach((node, i) => {
-        // Draw node
-        ctx.fillStyle = "rgba(59, 130, 246, 0.5)";
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw connections
-        nodes.forEach((other, j) => {
-          if (i === j) return;
-          const dx = other.x - node.x;
-          const dy = other.y - node.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          
-          if (dist < 150) {
-            ctx.strokeStyle = `rgba(59, 130, 246, ${0.15 * (1 - dist / 150)})`;
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(node.x, node.y);
-            ctx.lineTo(other.x, other.y);
-            ctx.stroke();
-          }
-        });
-
-        // Update position
-        node.x += node.vx;
-        node.y += node.vy;
-
-        // Bounce off edges
-        if (node.x < 0 || node.x > canvas.width) node.vx *= -1;
-        if (node.y < 0 || node.y > canvas.height) node.vy *= -1;
-      });
-
-      requestAnimationFrame(animate);
-    };
-
-    const animationId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(animationId);
-  }, []);
+  const completedDocuments = documents.filter(document => document.status === "completed").length;
+  const failedDocuments = documents.filter(document => document.status === "failed").length;
+  const pendingDocuments = documents.filter(document => document.status === "pending" || document.status === "processing").length;
+  const gauges: GaugeItem[] = [
+    {
+      title: "Documents",
+      value: documents.length,
+      loading: documentsLoading,
+      route: "/sector/corpus",
+      tone: "text-[#E6EDF3]",
+    },
+    {
+      title: "Analyzed",
+      value: completedDocuments,
+      loading: documentsLoading,
+      route: "/sector/corpus?status=completed",
+      tone: "text-[#3FB950]",
+    },
+    {
+      title: "In Progress",
+      value: pendingDocuments,
+      loading: documentsLoading,
+      route: "/sector/corpus?status=active",
+      tone: "text-[#D29922]",
+    },
+    {
+      title: "Needs Attention",
+      value: failedDocuments,
+      loading: documentsLoading,
+      route: "/sector/corpus?status=failed",
+      tone: failedDocuments > 0 ? "text-[#F85149]" : "text-[#8B949E]",
+    },
+  ];
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0D1117]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#1F6FEB]" />
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-black">
-        <div className="text-center space-y-4">
-          <h2 className="text-2xl font-bold text-white">Please sign in to continue</h2>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0D1117]">
+        <div className="space-y-4 text-center">
+          <h2 className="text-2xl font-semibold text-[#E6EDF3]">Please sign in to continue</h2>
           <a href={getLoginUrl()}>
-            <Button size="lg" className="bg-red-600 hover:bg-red-700">Sign In</Button>
+            <Button size="lg" className="bg-[#1F6FEB] hover:bg-[#388BFD]">
+              Sign In
+            </Button>
           </a>
         </div>
       </div>
@@ -176,143 +112,106 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Animated network background */}
-      <canvas ref={canvasRef} className="absolute inset-0 opacity-40" />
-
-      {/* Scanline effect */}
-      <div className="absolute inset-0 pointer-events-none opacity-5"
-        style={{
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.03) 2px, rgba(255, 255, 255, 0.03) 4px)"
-        }}
-      />
-
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-black/80 backdrop-blur-sm sticky top-0 z-20 relative">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-[#0D1117] text-[#E6EDF3]">
+      <header className="sticky top-0 z-20 border-b border-[#30363D] bg-[#161B22]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+            <div className="flex cursor-pointer items-center gap-3">
               {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-8 w-8" />}
-              <h1 className="text-xl font-bold text-white font-mono">{APP_TITLE}</h1>
+              <h1 className="text-lg font-semibold">{APP_TITLE}</h1>
             </div>
           </Link>
           <div className="flex items-center gap-4">
-            <span className="text-slate-400 text-sm font-mono">OPERATOR: {user?.name || user?.email}</span>
+            <span className="hidden text-sm text-[#8B949E] md:inline">{user?.name || user?.email}</span>
             <Link href="/settings">
-              <Button variant="ghost" size="sm" className="text-white hover:text-slate-300">
-                <SettingsIcon className="w-4 h-4" />
+              <Button variant="ghost" size="sm" className="text-[#E6EDF3] hover:bg-[#1C2128]">
+                <SettingsIcon className="h-4 w-4" />
               </Button>
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-12 relative z-10">
-        {/* Command Center Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Zap className="w-10 h-10 text-blue-500" />
-            <h1 className="text-5xl font-bold text-white font-mono tracking-wider">COMMAND CENTER</h1>
-            <Zap className="w-10 h-10 text-blue-500" />
+      <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
+        <section className="flex flex-col justify-between gap-4 border-b border-[#30363D] pb-8 md:flex-row md:items-end">
+          <div>
+            <p className="mb-2 text-sm font-medium uppercase tracking-wide text-[#8B949E]">Case Workspace</p>
+            <h1 className="text-3xl font-semibold">Forensic Legal Analysis</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#8B949E]">
+              Upload records, process them into findings, and turn record-supported issues into action-ready analysis.
+            </p>
           </div>
-          <p className="text-slate-400 font-mono uppercase tracking-wide">Select Your Mission Sector</p>
-          <div className="mt-4 inline-block px-4 py-2 bg-slate-900/50 border border-blue-500/30 rounded">
-            <p className="text-blue-400 font-mono text-sm">SYSTEM STATUS: <span className="text-green-400 font-bold">OPERATIONAL</span></p>
-          </div>
-        </div>
+          <Link href="/sector/corpus">
+            <Button className="bg-[#1F6FEB] hover:bg-[#388BFD]">
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Documents
+            </Button>
+          </Link>
+        </section>
 
-        {/* Sector Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          {SECTORS.map((sector) => (
-            <Link key={sector.id} href={sector.route}>
-              <Card
-                className={`cursor-pointer transition-all duration-300 border-2 border-slate-800 hover:border-${sector.glowColor} bg-gradient-to-br ${sector.color} hover:shadow-lg hover:shadow-${sector.glowColor}/20 h-full group`}
-              >
-                <CardHeader className="text-center">
-                  <div className={`w-20 h-20 mx-auto rounded-xl bg-${sector.glowColor}/10 border-2 border-${sector.glowColor}/30 flex items-center justify-center text-${sector.glowColor} mb-4 group-hover:scale-110 transition-transform group-hover:shadow-lg group-hover:shadow-${sector.glowColor}/30`}>
-                    {sector.icon}
-                  </div>
-                  <CardTitle className="text-white font-mono text-xl tracking-wide">{sector.name}</CardTitle>
-                  <CardDescription className="text-slate-400 mt-2">
-                    {sector.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <Button 
-                    className={`w-full bg-${sector.glowColor}/20 hover:bg-${sector.glowColor}/30 text-${sector.glowColor} border border-${sector.glowColor}/50 font-mono`}
-                    variant="outline"
-                  >
-                    ENTER SECTOR →
-                  </Button>
+        <section className="grid gap-4 md:grid-cols-4">
+          {gauges.map(gauge => (
+            <Link key={gauge.title} href={gauge.route}>
+              <Card className="h-full cursor-pointer border-[#30363D] bg-[#161B22] transition-colors hover:border-[#1F6FEB] hover:bg-[#1C2128]">
+                <CardContent className="p-5">
+                  <p className="text-xs uppercase tracking-wide text-[#8B949E]">{gauge.title}</p>
+                  <p className={`mt-2 text-3xl font-semibold ${gauge.tone}`}>{gauge.loading ? "..." : gauge.value}</p>
+                  <p className="mt-2 text-xs text-[#8B949E]">Open filtered evidence</p>
                 </CardContent>
               </Card>
             </Link>
           ))}
-        </div>
+        </section>
 
-        {/* System Stats */}
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="bg-slate-900/50 border-slate-800">
-            <CardContent className="p-6 text-center">
-              <div className="text-4xl font-bold text-blue-500 font-mono mb-2">15</div>
-              <div className="text-slate-400 text-sm font-mono">AI AGENTS ACTIVE</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900/50 border-slate-800">
-            <CardContent className="p-6 text-center">
-              <div className="text-4xl font-bold text-green-500 font-mono mb-2">7</div>
-              <div className="text-slate-400 text-sm font-mono">OPERATIONAL SECTORS</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900/50 border-slate-800">
-            <CardContent className="p-6 text-center">
-              <div className="text-4xl font-bold text-red-500 font-mono mb-2">∞</div>
-              <div className="text-slate-400 text-sm font-mono">IMMUNITY SHIELDS BROKEN</div>
-            </CardContent>
-          </Card>
-        </div>
+        <section className="grid gap-4 md:grid-cols-2">
+          {WORKSPACE_ITEMS.map(item => (
+            <Link key={item.title} href={item.route}>
+              <Card className="h-full cursor-pointer border-[#30363D] bg-[#161B22] transition-colors hover:border-[#1F6FEB] hover:bg-[#1C2128]">
+                <CardHeader>
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded border border-[#30363D] bg-[#0D1117] text-[#1F6FEB]">
+                    {item.icon}
+                  </div>
+                  <CardTitle className="text-[#E6EDF3]">{item.title}</CardTitle>
+                  <CardDescription className="text-[#8B949E]">{item.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          ))}
+        </section>
 
-        {/* Quick Access */}
-        <div className="mt-12">
-          <h2 className="text-2xl font-bold text-white mb-6 font-mono">QUICK ACCESS</h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            <Link href="/pricing">
-              <Card className="bg-slate-900/50 border-slate-800 hover:border-blue-500/50 transition-colors cursor-pointer">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-white font-mono font-bold mb-1">UPGRADE ARSENAL</h3>
-                    <p className="text-slate-400 text-sm">Access premium features and agents</p>
-                  </div>
-                  <Zap className="w-8 h-8 text-blue-500" />
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/settings">
-              <Card className="bg-slate-900/50 border-slate-800 hover:border-blue-500/50 transition-colors cursor-pointer">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-white font-mono font-bold mb-1">SYSTEM SETTINGS</h3>
-                    <p className="text-slate-400 text-sm">Manage account and preferences</p>
-                  </div>
-                  <SettingsIcon className="w-8 h-8 text-blue-500" />
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/reports">
-              <Card className="bg-slate-900/50 border-slate-800 hover:border-blue-500/50 transition-colors cursor-pointer">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-white font-mono font-bold mb-1">GENERATE REPORTS</h3>
-                    <p className="text-slate-400 text-sm">Create shareable evidence reports</p>
-                  </div>
-                  <Brain className="w-8 h-8 text-blue-500" />
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-        </div>
+        <section>
+          <Card className="border-[#30363D] bg-[#161B22]">
+            <CardHeader>
+              <CardTitle className="text-[#E6EDF3]">Recent Documents</CardTitle>
+              <CardDescription className="text-[#8B949E]">Open a document to run or review forensic analysis.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {documents.length === 0 ? (
+                <div className="rounded border border-dashed border-[#30363D] bg-[#0D1117] p-8 text-center">
+                  <p className="text-sm text-[#8B949E]">No documents uploaded yet.</p>
+                  <Link href="/sector/corpus">
+                    <Button className="mt-4 bg-[#1F6FEB] hover:bg-[#388BFD]">Upload First Document</Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="divide-y divide-[#30363D]">
+                  {documents.slice(0, 6).map(document => (
+                    <Link key={document.id} href={`/process/${document.id}`}>
+                      <div className="flex cursor-pointer items-center justify-between gap-4 py-4 hover:bg-[#1C2128]">
+                        <div>
+                          <p className="font-medium text-[#E6EDF3]">{document.fileName}</p>
+                          <p className="mt-1 text-xs text-[#8B949E]">{document.mimeType || "unknown type"}</p>
+                        </div>
+                        <span className="rounded border border-[#30363D] px-2 py-1 text-xs text-[#8B949E]">{document.status}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       </main>
     </div>
   );
 }
-

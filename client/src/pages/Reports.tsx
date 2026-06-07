@@ -1,371 +1,634 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { FileText, Download, Eye, Share2, Mail, Link as LinkIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Copy,
+  Download,
+  FileCheck,
+  FileText,
+  FolderSearch,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import { Link } from "wouter";
+
+type ReportScope = "case" | "files" | "time";
+type ReportTemplate =
+  | "court_packet"
+  | "case_strategy"
+  | "evidence_chronology"
+  | "immunity_relief"
+  | "discovery_demands"
+  | "executive_summary";
+type ReportFormat = "markdown" | "html" | "json";
+
+type ReportDocument = {
+  id: number;
+  name: string;
+  status: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  createdAt: Date;
+  hasText: boolean;
+  savedAgentOutputs: number;
+  structuredFindings: number;
+};
+
+type PreviewFinding = {
+  id: number;
+  title: string;
+  agentName: string;
+  findingType: string;
+  confidence: number;
+  leverageScore: number;
+  qcStatus: string;
+};
+
+const scopeOptions: Array<{ id: ReportScope; label: string; description: string; icon: typeof FolderSearch }> = [
+  {
+    id: "case",
+    label: "Whole case",
+    description: "Use every Corpus file and every saved agent run.",
+    icon: FolderSearch,
+  },
+  {
+    id: "files",
+    label: "Selected files",
+    description: "Build the report around specific filings, exhibits, transcripts, or orders.",
+    icon: FileText,
+  },
+  {
+    id: "time",
+    label: "Case era",
+    description: "Focus the report on events in a selected date period while using the full record.",
+    icon: CalendarDays,
+  },
+];
+
+const templates: Array<{ id: ReportTemplate; label: string; description: string }> = [
+  {
+    id: "court_packet",
+    label: "Court packet",
+    description: "Issue summary, source table, relief requested, and motion-ready next steps.",
+  },
+  {
+    id: "case_strategy",
+    label: "Case strategy",
+    description: "Claims, weak points, actor-specific risk, immunity issues, and next moves.",
+  },
+  {
+    id: "evidence_chronology",
+    label: "Evidence chronology",
+    description: "Timeline, contradictions, gaps, and records still needed.",
+  },
+  {
+    id: "immunity_relief",
+    label: "Immunity and relief",
+    description: "Damages immunity, non-damages relief, nonimmune actors, and discovery targets.",
+  },
+  {
+    id: "discovery_demands",
+    label: "Discovery demands",
+    description: "Exact records to demand and what each one proves or disproves.",
+  },
+  {
+    id: "executive_summary",
+    label: "Executive summary",
+    description: "Short, plain-English case overview for fast review.",
+  },
+];
+
+function safeFileDownload(fileName: string, content: string, format: ReportFormat) {
+  const type = format === "html" ? "text/html;charset=utf-8" : format === "json" ? "application/json;charset=utf-8" : "text/markdown;charset=utf-8";
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function copyText(content: string) {
+  try {
+    await navigator.clipboard.writeText(content);
+    toast.success("Report copied");
+  } catch {
+    toast.error("Clipboard failed. Use Download instead.");
+  }
+}
 
 export default function Reports() {
-  const [selectedDocument, setSelectedDocument] = useState<number | null>(null);
-  const [template, setTemplate] = useState<"legal_brief" | "investigation_report" | "media_packet" | "executive_summary">("executive_summary");
-  const [format, setFormat] = useState<"pdf" | "docx" | "html" | "json">("pdf");
-  const [brandingTitle, setBrandingTitle] = useState("");
-  const [brandingColor, setBrandingColor] = useState("#3b82f6");
-  const [reportData, setReportData] = useState<any>(null);
+  const [scope, setScope] = useState<ReportScope>("case");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
+  const [template, setTemplate] = useState<ReportTemplate>("court_packet");
+  const [format, setFormat] = useState<ReportFormat>("markdown");
+  const [reportTitle, setReportTitle] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [minConfidence, setMinConfidence] = useState(0);
+  const [includeBlockedFindings, setIncludeBlockedFindings] = useState(false);
+  const [selectedFindingIds, setSelectedFindingIds] = useState<number[]>([]);
+  const [reportData, setReportData] = useState<{ content: string; fileName: string; format: ReportFormat } | null>(null);
 
-  const { data: documents, isLoading: documentsLoading } = trpc.reports.list.useQuery();
-  const { data: preview } = trpc.reports.preview.useQuery(
-    { documentId: selectedDocument! },
-    { enabled: !!selectedDocument }
+  const documentsQuery = trpc.reports.list.useQuery();
+  const documents: ReportDocument[] = documentsQuery.data ?? [];
+  const readyDocuments = documents.filter((document) => document.status === "completed" && document.hasText);
+  const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.id));
+
+  const previewQuery = trpc.reports.preview.useQuery(
+    {
+      scope,
+      documentIds: scope === "files" ? selectedDocumentIds : undefined,
+      fromDate: fromDate || undefined,
+      toDate: toDate || undefined,
+    },
+    {
+      enabled: scope !== "files" || selectedDocumentIds.length > 0,
+      retry: false,
+    }
   );
-  
+
   const generateReport = trpc.reports.generate.useMutation({
     onSuccess: (data) => {
-      setReportData(data);
-      toast.success(`Report generated successfully in ${data.format.toUpperCase()} format!`);
+      setReportData({
+        content: data.content,
+        fileName: data.fileName,
+        format: data.format,
+      });
+      toast.success("Report generated");
     },
     onError: (error) => {
-      toast.error(`Failed to generate report: ${error.message}`);
+      toast.error(error.message);
     },
   });
 
+  const scopeDocumentCount = useMemo(() => {
+    if (scope === "files") return selectedDocumentIds.length;
+    return documents.length;
+  }, [documents.length, scope, selectedDocumentIds.length]);
+
+  const toggleDocument = (documentId: number) => {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId) ? current.filter((id) => id !== documentId) : [...current, documentId]
+    );
+  };
+
+  const toggleFinding = (findingId: number) => {
+    setSelectedFindingIds((current) =>
+      current.includes(findingId) ? current.filter((id) => id !== findingId) : [...current, findingId]
+    );
+  };
+
   const handleGenerate = () => {
-    if (!selectedDocument) {
-      toast.error("Please select a document first");
+    if (documents.length === 0) {
+      toast.error("Upload evidence before generating a report.");
+      return;
+    }
+    if (scope === "files" && selectedDocumentIds.length === 0) {
+      toast.error("Choose one or more files.");
+      return;
+    }
+    if (scope === "time" && !fromDate && !toDate) {
+      toast.error("Choose a start date, end date, or both.");
       return;
     }
 
     generateReport.mutate({
-      documentId: selectedDocument,
+      scope,
+      documentIds: scope === "files" ? selectedDocumentIds : undefined,
+      fromDate: fromDate || undefined,
+      toDate: toDate || undefined,
       template,
       format,
       includeSources: true,
+      minConfidence,
+      includeBlockedFindings,
+      selectedFindingIds: selectedFindingIds.length > 0 ? selectedFindingIds : undefined,
       branding: {
-        title: brandingTitle || undefined,
-        color: brandingColor,
+        title: reportTitle || undefined,
       },
     });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Animated background */}
-      <div className="fixed inset-0 opacity-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(59,130,246,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(59,130,246,0.05)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-      </div>
-
-      <div className="relative z-10 container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-            <FileText className="w-10 h-10 text-blue-400" />
-            Report Generation Center
-          </h1>
-          <p className="text-slate-400 text-lg">
-            Create professional, shareable reports from your evidence analysis
-          </p>
+    <div className="min-h-screen bg-[#0D1117] text-[#E6EDF3]">
+      <header className="sticky top-0 z-20 border-b border-[#30363D] bg-[#161B22]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+          <Link href="/dashboard">
+            <Button variant="ghost" className="gap-2 text-[#E6EDF3] hover:bg-[#1C2128]">
+              <ArrowLeft className="h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Badge variant="outline" className="border-[#30363D] bg-[#0D1117] text-[#8B949E]">
+            Reports
+          </Badge>
         </div>
+      </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Configuration Panel */}
-          <Card className="lg:col-span-1 bg-slate-800/50 border-slate-700 backdrop-blur-sm p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Configuration</h2>
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8">
+        <section className="grid gap-6 border-b border-[#30363D] pb-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+          <div>
+            <p className="mb-2 text-sm font-medium uppercase tracking-wide text-[#8B949E]">Report Builder</p>
+            <h1 className="text-4xl font-semibold tracking-tight text-white">Case Reports That Actually Work</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[#8B949E]">
+              Build court packets, immunity reports, discovery demands, evidence timelines, and executive summaries from the whole case or selected files.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8B949E]">Files</p>
+                <p className="mt-2 text-2xl font-semibold">{documentsQuery.isLoading ? "..." : documents.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8B949E]">Ready</p>
+                <p className="mt-2 text-2xl font-semibold text-[#3FB950]">{documentsQuery.isLoading ? "..." : readyDocuments.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8B949E]">Scope</p>
+                <p className="mt-2 text-2xl font-semibold text-[#58A6FF]">{scopeDocumentCount}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-            <div className="space-y-4">
-              {/* Document Selection */}
-              <div>
-                <Label className="text-slate-300 mb-2 block">Select Document</Label>
-                <Select
-                  value={selectedDocument?.toString()}
-                  onValueChange={(value) => setSelectedDocument(parseInt(value))}
-                >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue placeholder="Choose a document..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    {documentsLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading documents...
-                      </SelectItem>
-                    ) : documents && documents.length > 0 ? (
-                      documents.map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id.toString()} className="text-white">
-                          {doc.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="none" disabled>
-                        No documents available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Template Selection */}
-              <div>
-                <Label className="text-slate-300 mb-2 block">Report Template</Label>
-                <Select value={template} onValueChange={(value: any) => setTemplate(value)}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="executive_summary" className="text-white">
-                      Executive Summary
-                    </SelectItem>
-                    <SelectItem value="legal_brief" className="text-white">
-                      Legal Brief
-                    </SelectItem>
-                    <SelectItem value="investigation_report" className="text-white">
-                      Investigation Report
-                    </SelectItem>
-                    <SelectItem value="media_packet" className="text-white">
-                      Media Packet
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Format Selection */}
-              <div>
-                <Label className="text-slate-300 mb-2 block">Export Format</Label>
-                <Select value={format} onValueChange={(value: any) => setFormat(value)}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="pdf" className="text-white">
-                      PDF Document
-                    </SelectItem>
-                    <SelectItem value="docx" className="text-white">
-                      Word Document (DOCX)
-                    </SelectItem>
-                    <SelectItem value="html" className="text-white">
-                      HTML Page
-                    </SelectItem>
-                    <SelectItem value="json" className="text-white">
-                      JSON Data
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Branding */}
-              <div>
-                <Label className="text-slate-300 mb-2 block">Report Title (Optional)</Label>
-                <Input
-                  value={brandingTitle}
-                  onChange={(e) => setBrandingTitle(e.target.value)}
-                  placeholder="Custom report title..."
-                  className="bg-slate-700 border-slate-600 text-white"
-                />
-              </div>
-
-              <div>
-                <Label className="text-slate-300 mb-2 block">Brand Color</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="color"
-                    value={brandingColor}
-                    onChange={(e) => setBrandingColor(e.target.value)}
-                    className="w-16 h-10 bg-slate-700 border-slate-600"
-                  />
-                  <Input
-                    value={brandingColor}
-                    onChange={(e) => setBrandingColor(e.target.value)}
-                    className="flex-1 bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Generate Button */}
-              <Button
-                onClick={handleGenerate}
-                disabled={!selectedDocument || generateReport.isPending}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {generateReport.isPending ? (
-                  <>Generating...</>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Generate Report
-                  </>
-                )}
-              </Button>
-            </div>
-          </Card>
-
-          {/* Preview/Results Panel */}
-          <Card className="lg:col-span-2 bg-slate-800/50 border-slate-700 backdrop-blur-sm p-6">
-            <Tabs defaultValue="preview" className="w-full">
-              <TabsList className="bg-slate-700 mb-4">
-                <TabsTrigger value="preview" className="data-[state=active]:bg-slate-600">
-                  <Eye className="w-4 h-4 mr-2" />
-                  Preview
-                </TabsTrigger>
-                <TabsTrigger value="result" className="data-[state=active]:bg-slate-600">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Generated Report
-                </TabsTrigger>
-                <TabsTrigger value="share" className="data-[state=active]:bg-slate-600">
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Share & Export
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="preview" className="text-white">
-                {!selectedDocument ? (
-                  <div className="text-center py-12 text-slate-400">
-                    <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>Select a document to preview report data</p>
-                  </div>
-                ) : preview ? (
-                  <div className="space-y-4">
-                    <div className="bg-slate-700/50 p-4 rounded-lg">
-                      <h3 className="text-xl font-bold mb-2">{preview.document.fileName}</h3>
-                      <p className="text-sm text-slate-400">
-                        Status: <span className="text-green-400">{preview.document.status}</span>
-                      </p>
-                      <p className="text-sm text-slate-400">
-                        Uploaded: {new Date(preview.document.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-700/50 p-4 rounded-lg">
-                      <h4 className="font-bold mb-2">Statistics</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <section className="space-y-6">
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
+                <CardTitle>1. Choose Scope</CardTitle>
+                <CardDescription className="text-[#8B949E]">Start with the whole case, then narrow when needed.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {scopeOptions.map((option) => {
+                  const Icon = option.icon;
+                  const active = scope === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setScope(option.id)}
+                      className={
+                        active
+                          ? "w-full rounded-md border border-[#1F6FEB] bg-[#1F6FEB]/10 p-4 text-left"
+                          : "w-full rounded-md border border-[#30363D] bg-[#0D1117] p-4 text-left transition-colors hover:border-[#1F6FEB]"
+                      }
+                    >
+                      <div className="flex gap-3">
+                        <Icon className={active ? "mt-0.5 h-5 w-5 text-[#58A6FF]" : "mt-0.5 h-5 w-5 text-[#8B949E]"} />
                         <div>
-                          <p className="text-slate-400">Total Agents</p>
-                          <p className="text-2xl font-bold text-blue-400">{preview.statistics.totalAgents}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">Total Sections</p>
-                          <p className="text-2xl font-bold text-blue-400">{preview.statistics.totalSections}</p>
+                          <div className="font-medium text-white">{option.label}</div>
+                          <div className="mt-1 text-sm leading-5 text-[#8B949E]">{option.description}</div>
                         </div>
                       </div>
-                    </div>
+                    </button>
+                  );
+                })}
 
-                    <div className="space-y-3">
-                      <h4 className="font-bold">Agent Outputs</h4>
-                      {preview.outputs.map((output, idx) => (
-                        <div key={idx} className="bg-slate-700/50 p-4 rounded-lg">
-                          <h5 className="font-bold text-blue-400 mb-2">{output.agent}</h5>
-                          {output.sections.map((section, sIdx) => (
-                            <div key={sIdx} className="mb-2">
-                              <p className="text-sm text-slate-400">{section.title}</p>
-                              <p className="text-sm line-clamp-2">{section.content}</p>
-                            </div>
-                          ))}
-                        </div>
+                {scope === "files" && (
+                  <div className="mt-4 space-y-3 rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium">Files</span>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedDocumentIds(readyDocuments.map((document) => document.id))}
+                          className="border-[#30363D] bg-[#161B22]"
+                        >
+                          Ready files
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedDocumentIds([])}
+                          className="border-[#30363D] bg-[#161B22]"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="max-h-80 space-y-2 overflow-auto pr-1">
+                      {documents.map((document) => (
+                        <label key={document.id} className="flex cursor-pointer gap-3 rounded-md border border-[#30363D] bg-[#161B22] p-3">
+                          <Checkbox
+                            checked={selectedDocumentIds.includes(document.id)}
+                            onCheckedChange={() => toggleDocument(document.id)}
+                            className="mt-1"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-white">{document.name}</span>
+                            <span className="mt-1 block text-xs text-[#8B949E]">
+                              {document.status} · {document.savedAgentOutputs} saved output{document.savedAgentOutputs === 1 ? "" : "s"}
+                            </span>
+                          </span>
+                        </label>
                       ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-400">
-                    <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-                    <p>Loading preview...</p>
-                  </div>
                 )}
-              </TabsContent>
 
-              <TabsContent value="result" className="text-white">
-                {!reportData ? (
-                  <div className="text-center py-12 text-slate-400">
-                    <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>Generate a report to see results here</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="bg-green-900/30 border border-green-700 p-4 rounded-lg">
-                      <p className="text-green-400 font-bold">✓ Report Generated Successfully!</p>
-                      <p className="text-sm text-slate-300 mt-1">
-                        Format: {reportData.format.toUpperCase()}
-                      </p>
-                    </div>
-
-                    {reportData.data && (
-                      <div className="bg-slate-700/50 p-4 rounded-lg max-h-96 overflow-y-auto">
-                        <h4 className="font-bold mb-2">Report Data</h4>
-                        <pre className="text-xs text-slate-300 whitespace-pre-wrap">
-                          {JSON.stringify(reportData.data, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-
-                    {reportData.downloadUrl && (
-                      <Button className="w-full bg-green-600 hover:bg-green-700">
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Report
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="share" className="text-white">
-                <div className="space-y-4">
-                  <div className="bg-slate-700/50 p-4 rounded-lg">
-                    <h4 className="font-bold mb-3 flex items-center gap-2">
-                      <LinkIcon className="w-5 h-5" />
-                      Shareable Link
-                    </h4>
-                    <div className="flex gap-2">
-                      <Input
-                        value="https://dueprocess.ai/reports/abc123"
-                        readOnly
-                        className="bg-slate-600 border-slate-500 text-white"
-                      />
-                      <Button className="bg-blue-600 hover:bg-blue-700">Copy</Button>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-700/50 p-4 rounded-lg">
-                    <h4 className="font-bold mb-3 flex items-center gap-2">
-                      <Mail className="w-5 h-5" />
-                      Email Report
-                    </h4>
+                {scope === "time" && (
+                  <div className="mt-4 grid gap-4 rounded-md border border-[#30363D] bg-[#0D1117] p-3 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Input
-                        placeholder="recipient@example.com"
-                        className="bg-slate-600 border-slate-500 text-white"
-                      />
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                        <Mail className="w-4 h-4 mr-2" />
-                        Send Email
-                      </Button>
+                      <label className="text-sm font-medium" htmlFor="from-date">From</label>
+                      <Input id="from-date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="border-[#30363D] bg-[#161B22]" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium" htmlFor="to-date">To</label>
+                      <Input id="to-date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="border-[#30363D] bg-[#161B22]" />
                     </div>
                   </div>
+                )}
+              </CardContent>
+            </Card>
 
-                  <div className="bg-slate-700/50 p-4 rounded-lg">
-                    <h4 className="font-bold mb-3">Social Media</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" className="border-slate-600 hover:bg-slate-700">
-                        Share on Twitter
-                      </Button>
-                      <Button variant="outline" className="border-slate-600 hover:bg-slate-700">
-                        Share on Facebook
-                      </Button>
-                      <Button variant="outline" className="border-slate-600 hover:bg-slate-700">
-                        Share on LinkedIn
-                      </Button>
-                      <Button variant="outline" className="border-slate-600 hover:bg-slate-700">
-                        Copy Embed Code
-                      </Button>
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
+                <CardTitle>2. Pick Report Type</CardTitle>
+                <CardDescription className="text-[#8B949E]">Each template changes the editorial instructions and structure.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {templates.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setTemplate(item.id)}
+                    className={
+                      template === item.id
+                        ? "rounded-md border border-[#3FB950] bg-[#3FB950]/10 p-3 text-left"
+                        : "rounded-md border border-[#30363D] bg-[#0D1117] p-3 text-left transition-colors hover:border-[#3FB950]"
+                    }
+                  >
+                    <div className="font-medium text-white">{item.label}</div>
+                    <div className="mt-1 text-sm leading-5 text-[#8B949E]">{item.description}</div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="space-y-6">
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
+                <CardTitle>3. Generate</CardTitle>
+                <CardDescription className="text-[#8B949E]">Create a report you can copy, download, or open as HTML.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="report-title">Title</label>
+                  <Input
+                    id="report-title"
+                    value={reportTitle}
+                    onChange={(event) => setReportTitle(event.target.value)}
+                    placeholder="Optional custom title"
+                    className="border-[#30363D] bg-[#0D1117]"
+                  />
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {(["markdown", "html", "json"] as ReportFormat[]).map((item) => (
+                    <Button
+                      key={item}
+                      type="button"
+                      variant="outline"
+                      onClick={() => setFormat(item)}
+                      className={
+                        format === item
+                          ? "border-[#1F6FEB] bg-[#1F6FEB]/10 text-white"
+                          : "border-[#30363D] bg-[#0D1117] text-[#E6EDF3]"
+                      }
+                    >
+                      {item.toUpperCase()}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 rounded-md border border-[#30363D] bg-[#0D1117] p-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="min-confidence">Minimum confidence</label>
+                    <Input
+                      id="min-confidence"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={minConfidence}
+                      onChange={(event) => setMinConfidence(Math.max(0, Math.min(100, Number(event.target.value) || 0)))}
+                      className="border-[#30363D] bg-[#161B22]"
+                    />
+                    <p className="text-xs text-[#8B949E]">Use 90 or 95 for stricter court packets.</p>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#30363D] bg-[#161B22] p-3">
+                    <Checkbox
+                      checked={includeBlockedFindings}
+                      onCheckedChange={(checked) => setIncludeBlockedFindings(Boolean(checked))}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">Admin override: include blocked findings</span>
+                      <span className="mt-1 block text-xs leading-5 text-[#8B949E]">
+                        Blocked/needs-more-proof findings stay out by default.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <Button
+                  onClick={handleGenerate}
+                  disabled={generateReport.isPending || documentsQuery.isLoading}
+                  className="h-12 w-full bg-[#1F6FEB] text-base hover:bg-[#388BFD]"
+                >
+                  {generateReport.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Report
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
+                <CardTitle>Scope Preview</CardTitle>
+                <CardDescription className="text-[#8B949E]">What will be included before the report runs.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {previewQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-[#8B949E]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading preview
+                  </div>
+                ) : previewQuery.data ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                        <p className="text-xs text-[#8B949E]">Documents</p>
+                        <p className="mt-1 text-xl font-semibold">{previewQuery.data.statistics.documents}</p>
+                      </div>
+                      <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                        <p className="text-xs text-[#8B949E]">Ready</p>
+                        <p className="mt-1 text-xl font-semibold text-[#3FB950]">{previewQuery.data.statistics.readyDocuments}</p>
+                      </div>
+                      <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                        <p className="text-xs text-[#8B949E]">Outputs</p>
+                        <p className="mt-1 text-xl font-semibold text-[#58A6FF]">{previewQuery.data.statistics.savedAgentOutputs}</p>
+                      </div>
+                      <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                        <p className="text-xs text-[#8B949E]">Findings</p>
+                        <p className="mt-1 text-xl font-semibold text-[#D29922]">{previewQuery.data.statistics.structuredFindings}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {previewQuery.data.documents.slice(0, 5).map((document) => (
+                        <div key={document.id} className="flex items-center justify-between gap-3 rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{document.fileName}</p>
+                            <p className="text-xs text-[#8B949E]">{document.status}</p>
+                          </div>
+                          {document.hasText ? <CheckCircle2 className="h-4 w-4 text-[#3FB950]" /> : <FileCheck className="h-4 w-4 text-[#D29922]" />}
+                        </div>
+                      ))}
+                      {previewQuery.data.documents.length > 5 && (
+                        <p className="text-xs text-[#8B949E]">+{previewQuery.data.documents.length - 5} more documents</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-white">Structured findings</p>
+                          <p className="text-xs text-[#8B949E]">Select none to use all QC-cleared findings in this scope.</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedFindingIds([])}
+                          className="border-[#30363D] bg-[#161B22]"
+                        >
+                          Clear selection
+                        </Button>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-auto">
+                        {((previewQuery.data.findings ?? []) as PreviewFinding[]).slice(0, 20).map((finding) => (
+                          <label key={finding.id} className="flex cursor-pointer gap-3 rounded-md border border-[#30363D] bg-[#161B22] p-3">
+                            <Checkbox
+                              checked={selectedFindingIds.includes(finding.id)}
+                              onCheckedChange={() => toggleFinding(finding.id)}
+                              className="mt-1"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-white">{finding.title}</span>
+                              <span className="mt-1 block text-xs text-[#8B949E]">
+                                {finding.agentName} · {finding.findingType} · QC {finding.qcStatus}
+                              </span>
+                            </span>
+                            <span className="text-right text-xs text-[#8B949E]">
+                              <span className="block text-[#3FB950]">C {finding.confidence}</span>
+                              <span className="block text-[#58A6FF]">L {finding.leverageScore}</span>
+                            </span>
+                          </label>
+                        ))}
+                        {(previewQuery.data.findings ?? []).length === 0 && (
+                          <div className="rounded-md border border-dashed border-[#30363D] p-4 text-center text-sm text-[#8B949E]">
+                            Run the Leverage Engine to create structured findings.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </Card>
+                ) : (
+                  <div className="rounded-md border border-dashed border-[#30363D] p-6 text-center text-sm text-[#8B949E]">
+                    Choose files or a scope to preview included records.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
+                <CardTitle>Generated Report</CardTitle>
+                <CardDescription className="text-[#8B949E]">Copy it, download it, or inspect the generated structure.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!reportData ? (
+                  <div className="rounded-md border border-dashed border-[#30363D] p-8 text-center text-sm text-[#8B949E]">
+                    Generate a report to see the result here.
+                  </div>
+                ) : (
+                  <Tabs defaultValue="report">
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                      <TabsList className="bg-[#0D1117]">
+                        <TabsTrigger value="report">Report</TabsTrigger>
+                        <TabsTrigger value="sources">Selected Files</TabsTrigger>
+                      </TabsList>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => copyText(reportData.content)}
+                        className="ml-auto border-[#30363D] bg-[#0D1117]"
+                      >
+                        <Copy className="mr-1 h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => safeFileDownload(reportData.fileName, reportData.content, reportData.format)}
+                        className="bg-[#3FB950] text-[#0D1117] hover:bg-[#56D364]"
+                      >
+                        <Download className="mr-1 h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                    </div>
+
+                    <TabsContent value="report">
+                      <div className="max-h-[34rem] overflow-auto whitespace-pre-wrap rounded-md border border-[#30363D] bg-[#0D1117] p-4 text-sm leading-6 text-[#C9D1D9]">
+                        {reportData.content}
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="sources">
+                      <div className="space-y-2">
+                        {(scope === "files" ? selectedDocuments : documents).map((document) => (
+                          <div key={document.id} className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                            <p className="text-sm font-medium">{document.name}</p>
+                            <p className="mt-1 text-xs text-[#8B949E]">{document.status} · {document.savedAgentOutputs} saved outputs</p>
+                          </div>
+                        ))}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                )}
+              </CardContent>
+            </Card>
+          </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-

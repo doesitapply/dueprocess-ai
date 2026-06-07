@@ -1,62 +1,245 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
-import { storagePut } from "./storage";
+import { storageGet, storagePut } from "./storage";
 import { getDb } from "./db";
 import { documents } from "../drizzle/schema";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
+import { createHash } from "node:crypto";
+import mammoth from "mammoth";
+import { PDFParse } from "pdf-parse";
+import { enforceDocumentUploadLimit } from "./accessControl";
 
 // Helper to generate random suffix for file keys
-function randomSuffix() {
-  return Math.random().toString(36).substring(2, 10);
+function shortHash(value: string) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+function sha256(buffer: Buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+function normalizeExtractedText(text: string) {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function withSourceAnchor(text: string, hash: string) {
+  const normalized = normalizeExtractedText(text);
+  if (!normalized) return "";
+  return `SOURCE_SHA256: ${hash}\n\n${normalized}`;
+}
+
+type ExtractionResult = {
+  text: string;
+  method: string;
+  status: "completed" | "failed";
+  note?: string;
+};
+
+function completedExtraction(text: string, method: string, documentHash: string, note?: string): ExtractionResult {
+  const anchored = withSourceAnchor(text, documentHash);
+  return {
+    text: anchored,
+    method,
+    status: anchored ? "completed" : "failed",
+    note: anchored ? note : `No usable text extracted by ${method}.`,
+  };
+}
+
+function failedExtraction(method: string, note: string): ExtractionResult {
+  return {
+    text: "",
+    method,
+    status: "failed",
+    note,
+  };
+}
+
+function documentHasHash(document: typeof documents.$inferSelect, documentHash: string) {
+  return (
+    document.extractedText?.startsWith(`SOURCE_SHA256: ${documentHash}`) ||
+    document.fileKey?.includes(documentHash.slice(0, 16))
+  );
+}
+
+async function fetchStoredFileBuffer(fileKey: string, fileUrl: string): Promise<Buffer> {
+  const signed = fileKey ? await storageGet(fileKey).catch(() => null) : null;
+  const url = signed?.url || fileUrl;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Could not download stored file for OCR retry: ${response.status} ${response.statusText}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function extractPdfText(fileBuffer: Buffer) {
+  const parser = new PDFParse({ data: fileBuffer });
+  try {
+    const result = await parser.getText();
+    return normalizeExtractedText(result.text || "");
+  } finally {
+    await parser.destroy();
+  }
+}
+
+async function extractImageTextWithVision(fileBuffer: Buffer, mimeType: string) {
+  const dataUrl = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content:
+          "Extract all visible text from this legal document image. Preserve line breaks, captions, headers, dates, names, case numbers, and exhibit labels. Return only extracted text.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "OCR this legal document image. Return verbatim text only.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: dataUrl,
+              detail: "high",
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  return normalizeExtractedText(typeof content === "string" ? content : JSON.stringify(content || ""));
+}
+
+async function extractPdfWithVision(fileUrl: string) {
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content:
+          "Extract all text from this legal PDF. Preserve document structure, page order, headings, dates, names, case numbers, quotes, and exhibit labels. Return only extracted text.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Extract verbatim text from this PDF. If it is scanned, perform OCR. Return text only.",
+          },
+          {
+            type: "file_url",
+            file_url: {
+              url: fileUrl,
+              mime_type: "application/pdf",
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  return normalizeExtractedText(typeof content === "string" ? content : JSON.stringify(content || ""));
 }
 
 // Helper to extract text from different file types
-async function extractTextContent(fileBuffer: Buffer, mimeType: string): Promise<string> {
+async function extractTextContent(
+  fileBuffer: Buffer,
+  mimeType: string,
+  fileUrl: string,
+  documentHash: string
+): Promise<ExtractionResult> {
   try {
     // Plain text files
     if (mimeType.includes("text/plain") || mimeType.includes("text/markdown")) {
-      return fileBuffer.toString("utf-8");
+      return completedExtraction(fileBuffer.toString("utf-8"), "plain_text", documentHash);
     }
 
     // JSON files
     if (mimeType.includes("application/json")) {
-      return JSON.stringify(JSON.parse(fileBuffer.toString("utf-8")), null, 2);
+      return completedExtraction(JSON.stringify(JSON.parse(fileBuffer.toString("utf-8")), null, 2), "json", documentHash);
     }
 
     // DOCX files
     if (mimeType.includes("wordprocessingml") || mimeType.includes("msword")) {
-      // For now, return placeholder - would need mammoth or similar library
-      return "[DOCX content - text extraction pending]";
+      const result = await mammoth.extractRawText({ buffer: fileBuffer });
+      return completedExtraction(result.value, "docx_mammoth", documentHash);
     }
 
     // PDF files
     if (mimeType.includes("pdf")) {
-      // For now, return placeholder - would need pdf-parse or similar
-      return "[PDF content - OCR extraction pending]";
+      const parsedText = await extractPdfText(fileBuffer);
+      if (parsedText.length >= 100) {
+        return completedExtraction(parsedText, "pdf_text", documentHash);
+      }
+
+      const ocrText = await extractPdfWithVision(fileUrl);
+      return completedExtraction(ocrText, "pdf_vision_ocr", documentHash, parsedText ? "Native PDF text was too short; vision OCR fallback used." : "Native PDF text was empty; vision OCR fallback used.");
     }
 
     // Images
     if (mimeType.includes("image/")) {
-      return "[Image file - OCR extraction pending]";
+      const ocrText = await extractImageTextWithVision(fileBuffer, mimeType);
+      return completedExtraction(ocrText, "image_vision_ocr", documentHash);
     }
 
-    return "";
+    return failedExtraction("unsupported", `Unsupported file type: ${mimeType || "unknown"}.`);
   } catch (error) {
     console.error("Error extracting text:", error);
+    return failedExtraction("error", error instanceof Error ? error.message : "Unknown extraction error.");
+  }
+}
+
+async function summarizeExtractedText(extractedText: string): Promise<string> {
+  if (!extractedText || extractedText.length <= 100) return "";
+  try {
+    const summaryResponse = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: "You are a legal document summarizer. Provide a concise 2-3 sentence summary of the document.",
+        },
+        {
+          role: "user",
+          content: `Summarize this document:\n\n${extractedText.substring(0, 5000)}`,
+        },
+      ],
+    });
+    const content = summaryResponse.choices[0]?.message?.content;
+    return typeof content === 'string' ? content : "";
+  } catch (error) {
+    console.error("Summary generation failed:", error);
     return "";
   }
+}
+
+function appendExtractionSummary(summary: string, extraction: ExtractionResult) {
+  const extractionSummary = [
+    extraction.note || "",
+    extraction.method ? `Extraction method: ${extraction.method}.` : "",
+    extraction.status === "failed" ? "Document saved, but it is not ready for agent analysis. Retry OCR or upload a cleaner copy." : "",
+  ].filter(Boolean).join(" ");
+
+  if (!summary && extractionSummary) return extractionSummary;
+  if (summary && extractionSummary) return `${summary}\n\n${extractionSummary}`;
+  return summary;
 }
 
 // Helper to generate embeddings using LLM
 async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    // Use LLM to generate embeddings
-    // For now, we'll use a simple approach - in production, use OpenAI embeddings API
-    // This is a placeholder that returns a mock embedding
-    // TODO: Implement actual embedding generation
-    const mockEmbedding = Array.from({ length: 1536 }, () => Math.random());
-    return mockEmbedding;
+    const digest = createHash("sha256").update(text).digest();
+    return Array.from({ length: 384 }, (_, index) => {
+      const byte = digest[index % digest.length];
+      return Number(((byte - 128) / 128).toFixed(6));
+    });
   } catch (error) {
     console.error("Error generating embedding:", error);
     return [];
@@ -82,15 +265,45 @@ export const uploadRouter = router({
       // Decode base64 file data
       const fileBuffer = Buffer.from(fileData, "base64");
       const fileSize = fileBuffer.length;
+      const documentHash = sha256(fileBuffer);
+
+      const db = await getDb();
+      if (!db) {
+        throw new Error("Database not available");
+      }
+
+      const { eq } = await import("drizzle-orm");
+      const existingDocuments = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+      const duplicate = existingDocuments.find((document) => documentHasHash(document, documentHash));
+      if (duplicate) {
+        return {
+          success: duplicate.status === "completed" && Boolean(duplicate.extractedText?.trim()),
+          duplicate: true,
+          existingDocumentId: duplicate.id,
+          fileUrl: duplicate.fileUrl,
+          documentHash,
+          status: duplicate.status,
+          extractionMethod: "duplicate",
+          extractionNote: `Duplicate file detected. Existing Corpus document reused: ${duplicate.fileName}`,
+          textLength: duplicate.extractedText?.length ?? 0,
+          summary: duplicate.summary ?? "",
+        };
+      }
+
+      await enforceDocumentUploadLimit(ctx.user);
 
       // Generate unique file key
-      const fileKey = `${userId}-uploads/${fileName}-${randomSuffix()}`;
+      const fileKey = `${userId}-uploads/${documentHash.slice(0, 16)}-${shortHash(fileName)}-${fileName}`;
 
       // Upload to S3
       const { url: fileUrl } = await storagePut(fileKey, fileBuffer, mimeType);
 
       // Extract text content
-      let extractedText = await extractTextContent(fileBuffer, mimeType);
+      let extraction = await extractTextContent(fileBuffer, mimeType, fileUrl, documentHash);
+      let extractedText = extraction.text;
 
       // If audio/video, transcribe it
       if (mimeType.includes("audio/") || mimeType.includes("video/")) {
@@ -99,11 +312,19 @@ export const uploadRouter = router({
             audioUrl: fileUrl,
           });
           if ('text' in transcription) {
-            extractedText = transcription.text;
+            const transcriptionText = withSourceAnchor(transcription.text, documentHash);
+            extractedText = transcriptionText;
+            extraction = {
+              text: transcriptionText,
+              method: "audio_transcription",
+              status: transcriptionText ? "completed" : "failed",
+              note: transcriptionText ? undefined : "Audio/video transcription returned no usable text.",
+            };
           }
         } catch (error) {
           console.error("Transcription failed:", error);
-          extractedText = "[Transcription failed]";
+          extractedText = "";
+          extraction = failedExtraction("audio_transcription", error instanceof Error ? error.message : "Transcription failed.");
         }
       }
 
@@ -112,33 +333,9 @@ export const uploadRouter = router({
       const embeddingJson = JSON.stringify(embedding);
 
       // Generate summary using LLM
-      let summary = "";
-      if (extractedText && extractedText.length > 100) {
-        try {
-          const summaryResponse = await invokeLLM({
-            messages: [
-              {
-                role: "system",
-                content: "You are a legal document summarizer. Provide a concise 2-3 sentence summary of the document.",
-              },
-              {
-                role: "user",
-                content: `Summarize this document:\n\n${extractedText.substring(0, 5000)}`,
-              },
-            ],
-          });
-          const content = summaryResponse.choices[0]?.message?.content;
-          summary = typeof content === 'string' ? content : "";
-        } catch (error) {
-          console.error("Summary generation failed:", error);
-        }
-      }
-
-      // Save to database
-      const db = await getDb();
-      if (!db) {
-        throw new Error("Database not available");
-      }
+      let summary = await summarizeExtractedText(extractedText);
+      const documentStatus = extraction.status;
+      summary = appendExtractionSummary(summary, extraction);
 
       await db.insert(documents).values({
         userId,
@@ -150,14 +347,90 @@ export const uploadRouter = router({
         extractedText,
         embedding: embeddingJson,
         summary,
-        status: "completed",
+        status: documentStatus,
       });
 
       return {
-        success: true,
+        success: documentStatus === "completed",
         fileUrl,
+        documentHash,
+        status: documentStatus,
+        extractionMethod: extraction.method,
+        extractionNote: extraction.note,
+        textLength: extractedText.length,
         summary,
       };
+    }),
+
+  retryExtraction: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { eq } = await import("drizzle-orm");
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, input.id))
+        .limit(1);
+
+      if (!document || document.userId !== ctx.user.id) {
+        throw new Error("Document not found");
+      }
+
+      await db.update(documents).set({ status: "processing" }).where(eq(documents.id, document.id));
+
+      try {
+        const fileBuffer = await fetchStoredFileBuffer(document.fileKey, document.fileUrl);
+        const documentHash = sha256(fileBuffer);
+        const extraction = await extractTextContent(
+          fileBuffer,
+          document.mimeType || "application/octet-stream",
+          document.fileUrl,
+          documentHash
+        );
+        const embedding = extraction.text ? await generateEmbedding(extraction.text) : [];
+        let summary = await summarizeExtractedText(extraction.text);
+        summary = appendExtractionSummary(summary, extraction);
+
+        await db
+          .update(documents)
+          .set({
+            extractedText: extraction.text,
+            embedding: JSON.stringify(embedding),
+            summary,
+            status: extraction.status,
+          })
+          .where(eq(documents.id, document.id));
+
+        return {
+          success: extraction.status === "completed",
+          status: extraction.status,
+          documentHash,
+          extractionMethod: extraction.method,
+          extractionNote: extraction.note,
+          textLength: extraction.text.length,
+          summary,
+        };
+      } catch (error) {
+        const extraction = failedExtraction("retry_error", error instanceof Error ? error.message : "OCR retry failed.");
+        await db
+          .update(documents)
+          .set({
+            status: "failed",
+            summary: appendExtractionSummary(document.summary || "", extraction),
+          })
+          .where(eq(documents.id, document.id));
+        return {
+          success: false,
+          status: "failed" as const,
+          extractionMethod: extraction.method,
+          extractionNote: extraction.note,
+          textLength: 0,
+          summary: extraction.note,
+        };
+      }
     }),
 
   /**
@@ -219,4 +492,3 @@ export const uploadRouter = router({
       return filtered;
     }),
 });
-

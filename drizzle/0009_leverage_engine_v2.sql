@@ -1,0 +1,1 @@
+ALTER TABLE `agent_findings` MODIFY COLUMN `findingType` enum('record_supported','inference','strong_inference','weak_inference','missing_record','missing_critical','suspicious_absence','legal_authority','contradiction','adverse_fact') NOT NULL;

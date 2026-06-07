@@ -57,6 +57,20 @@
       "when": 1762559962287,
       "tag": "0007_slim_timeslip",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1780409980000,
+      "tag": "0008_leverage_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1780580600000,
+      "tag": "0009_leverage_engine_v2",
+      "breakpoints": true
     }
   ]
 }

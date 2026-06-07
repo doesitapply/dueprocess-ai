@@ -3,7 +3,7 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
+import { registerAuthRoutes } from "./auth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -38,8 +38,8 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads (100MB to handle base64-encoded files)
   app.use(express.json({ limit: "100mb" }));
   app.use(express.urlencoded({ limit: "100mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
+  // Local auth routes under /api/auth/*
+  registerAuthRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

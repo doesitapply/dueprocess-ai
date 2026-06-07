@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, 
@@ -20,7 +20,19 @@ import {
   SwarmSession,
   swarmAgentResults,
   InsertSwarmAgentResult,
-  SwarmAgentResult
+  SwarmAgentResult,
+  agentRuns,
+  InsertAgentRun,
+  AgentRun,
+  agentFindings,
+  InsertAgentFinding,
+  AgentFinding,
+  agentFindingAudits,
+  InsertAgentFindingAudit,
+  AgentFindingAudit,
+  llmUsageEvents,
+  InsertLlmUsageEvent,
+  LlmUsageEvent
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -73,12 +85,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
     }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
+    if (user.openId === ENV.ownerOpenId) {
       values.role = 'admin';
       updateSet.role = 'admin';
+    } else if (user.role !== undefined && user.role !== 'admin') {
+      values.role = user.role;
+      updateSet.role = user.role;
     }
 
     if (!values.lastSignedIn) {
@@ -167,6 +179,110 @@ export async function getAgentOutputByDocumentId(documentId: number): Promise<Ag
 
   const result = await db.select().from(agentOutputs).where(eq(agentOutputs.documentId, documentId)).limit(1);
   return result[0];
+}
+
+export async function getAgentOutputsByDocumentId(documentId: number): Promise<AgentOutput[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(agentOutputs).where(eq(agentOutputs.documentId, documentId)).orderBy(desc(agentOutputs.createdAt));
+}
+
+export async function getAgentOutputsByDocumentIds(documentIds: number[]): Promise<AgentOutput[]> {
+  const db = await getDb();
+  if (!db || documentIds.length === 0) return [];
+
+  return db.select().from(agentOutputs).where(inArray(agentOutputs.documentId, documentIds)).orderBy(desc(agentOutputs.createdAt));
+}
+
+export async function deleteAgentOutputById(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(agentOutputs).where(eq(agentOutputs.id, id));
+}
+
+export async function deleteAgentOutputsByDocumentIds(documentIds: number[]): Promise<void> {
+  const db = await getDb();
+  if (!db || documentIds.length === 0) return;
+
+  await db.delete(agentOutputs).where(inArray(agentOutputs.documentId, documentIds));
+}
+
+// Leverage engine queries
+export async function createAgentRun(run: InsertAgentRun): Promise<AgentRun> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(agentRuns).values(run);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(agentRuns).where(eq(agentRuns.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function updateAgentRun(id: number, update: Partial<AgentRun>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(agentRuns).set(update).where(eq(agentRuns.id, id));
+}
+
+export async function createAgentFinding(finding: InsertAgentFinding): Promise<AgentFinding> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(agentFindings).values(finding);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(agentFindings).where(eq(agentFindings.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function updateAgentFinding(id: number, update: Partial<AgentFinding>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(agentFindings).set(update).where(eq(agentFindings.id, id));
+}
+
+export async function getAgentFindingsByUserId(userId: number): Promise<AgentFinding[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(agentFindings).where(eq(agentFindings.userId, userId)).orderBy(desc(agentFindings.createdAt));
+}
+
+export async function getAgentFindingsByRunId(runId: number): Promise<AgentFinding[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(agentFindings).where(eq(agentFindings.runId, runId)).orderBy(desc(agentFindings.leverageScore));
+}
+
+export async function createAgentFindingAudit(audit: InsertAgentFindingAudit): Promise<AgentFindingAudit> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(agentFindingAudits).values(audit);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(agentFindingAudits).where(eq(agentFindingAudits.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function createLlmUsageEvent(event: InsertLlmUsageEvent): Promise<LlmUsageEvent> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(llmUsageEvents).values(event);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(llmUsageEvents).where(eq(llmUsageEvents.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getLlmUsageEventsByUserId(userId: number): Promise<LlmUsageEvent[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(llmUsageEvents).where(eq(llmUsageEvents.userId, userId)).orderBy(desc(llmUsageEvents.createdAt));
 }
 
 // Subscription queries
@@ -294,4 +410,3 @@ export async function getSwarmAgentResults(swarmSessionId: number): Promise<Swar
     .where(eq(swarmAgentResults.swarmSessionId, swarmSessionId))
     .orderBy(desc(swarmAgentResults.createdAt));
 }
-

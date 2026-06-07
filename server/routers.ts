@@ -2,18 +2,51 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { stripeRouter } from "./stripeRouter";
-import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults } from "./db";;
+import { getDb, getUserByOpenId, createDocument, getUserDocuments, getDocumentById, updateDocumentStatus, createAgentOutput, getAgentOutputByDocumentId, getAgentOutputsByDocumentIds, deleteAgentOutputById, deleteAgentOutputsByDocumentIds, createSwarmSession, updateSwarmSession, getSwarmSession, createSwarmAgentResult, updateSwarmAgentResult, getSwarmAgentResults, createAgentRun, updateAgentRun, createAgentFinding, updateAgentFinding, createAgentFindingAudit, createLlmUsageEvent, getAgentFindingsByUserId } from "./db";;
 import { documents, agentOutputs, subscriptions, payments, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
-import { getAgentById, getAgentsBySector } from "./agentConfig";
+import type { AgentConfig } from "./agentConfig";
+import { AGENTS, getAgentById, getAgentsBySector } from "./agentConfig";
 import { fileProcessingRouter } from "./fileProcessing";
 import { reportRouter } from "./reportGenerator";
 import { uploadRouter } from "./uploadRouter";
 import { integrationsRouter } from "./integrationsRouter";
+import { settingsRouter } from "./settingsRouter";
+import { enforceAgentRunAccess, enforceDocumentUploadLimit, enforceDraftAccess } from "./accessControl";
+import {
+  LEVERAGE_PROMPT_VERSION,
+  applyRiskBasedQcGate,
+  auditFindingWithLLM,
+  buildStructuredAgentPrompt,
+  buildWarRoomSynthesis,
+  fallbackQcAuditForFinding,
+  isReportEligible,
+  normalizeQcAuditForReportUse,
+  parseStructuredAgentOutput,
+  usageFromResponse,
+  verifyFindingQuotes,
+  type StructuredFinding,
+} from "./leverageEngine";
+
+function assertDocumentReadyForAnalysis(document: { status: string; extractedText?: string | null; fileName: string }) {
+  if (document.status !== "completed" || !document.extractedText || document.extractedText.trim().length === 0) {
+    throw new Error(`${document.fileName} is not ready for agent analysis yet. Wait until evidence processing completes.`);
+  }
+}
+
+function safeJsonArray(value: string | null): unknown[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -22,8 +55,86 @@ export const appRouter = router({
   reports: reportRouter,
   upload: uploadRouter,
   integrations: integrationsRouter,
+  settings: settingsRouter,
 
   agents: router({
+    catalog: adminProcedure.query(() => {
+      return {
+        agents: AGENTS.map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          division: agent.division,
+          description: agent.description,
+          capabilities: agent.capabilities,
+        })),
+        superAgents: [
+          {
+            id: "case_triage",
+            name: "Case Triage",
+            description: "Fast first pass for issues, proof gaps, and next actions.",
+            agentIds: ["constitutional_analyst", "criminal_law_specialist", "pattern_recognition_engine", "timeline_constructor"],
+          },
+          {
+            id: "constitutional_record",
+            name: "Constitutional Record Builder",
+            description: "Turns the record into rights violations, authority, and civil-rights framing.",
+            agentIds: ["constitutional_analyst", "civil_rights_expert", "precedent_miner", "statute_scanner"],
+          },
+          {
+            id: "brady_misconduct",
+            name: "Brady and Misconduct Review",
+            description: "Looks for disclosure failures, false testimony, contradictions, and prosecutorial misconduct.",
+            agentIds: ["criminal_law_specialist", "contradiction_detector", "timeline_constructor", "canon_hunter"],
+          },
+          {
+            id: "monell_pattern",
+            name: "Monell Pattern Map",
+            description: "Maps policy/custom, failure to train, ratification, missing pattern proof, and municipal-liability pressure.",
+            agentIds: ["monell_pattern_mapper", "liability_remedy_ranker", "civil_rights_expert", "pattern_recognition_engine", "discovery_tactician"],
+          },
+          {
+            id: "liability_war_room",
+            name: "Liability War Room",
+            description: "Ranks the highest-payoff/highest-win issues, then checks weak claims before synthesis.",
+            agentIds: ["liability_remedy_ranker", "immunity_piercer", "monell_pattern_mapper", "criminal_law_specialist", "contradiction_detector", "qc_auditor"],
+          },
+          {
+            id: "leverage_engine_v2",
+            name: "Leverage Engine v2 Strike Team",
+            description: "Maximum skepticism: gap architect, contradiction/pattern hunter, constitutional/criminal procedure, Monell, evasion, discovery, authority, and ruthless QC.",
+            agentIds: [
+              "timeline_constructor",
+              "contradiction_detector",
+              "pattern_recognition_engine",
+              "constitutional_analyst",
+              "civil_rights_expert",
+              "criminal_law_specialist",
+              "immunity_piercer",
+              "monell_pattern_mapper",
+              "skeptical_adversarial_reader",
+              "liability_remedy_ranker",
+              "discovery_tactician",
+              "precedent_miner",
+              "canon_hunter",
+              "qc_auditor",
+            ],
+          },
+          {
+            id: "motion_ready",
+            name: "Motion-Ready Drafting",
+            description: "Pairs legal analysis with strategy and drafting agents for a court-facing scaffold.",
+            agentIds: ["motion_drafter", "constitutional_analyst", "precedent_miner", "discovery_tactician"],
+          },
+          {
+            id: "full_admin_panel",
+            name: "Full Admin Panel",
+            description: "Runs every configured DueProcess agent across the selected scope.",
+            agentIds: AGENTS.map((agent) => agent.id),
+          },
+        ],
+      };
+    }),
+
     /**
      * Process a document with a specific agent
      */
@@ -35,6 +146,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { documentId, agentId } = input;
         const userId = ctx.user.id;
+        await enforceAgentRunAccess(ctx.user, "legal");
 
         // Get the agent configuration
         const agent = getAgentById(agentId);
@@ -47,6 +159,7 @@ export const appRouter = router({
         if (!document || document.userId !== userId) {
           throw new Error("Document not found or unauthorized");
         }
+        assertDocumentReadyForAnalysis(document);
 
         // Update document status to processing
         await updateDocumentStatus(documentId, "processing");
@@ -107,11 +220,88 @@ export const appRouter = router({
         if (!document || document.userId !== userId) {
           throw new Error("Document not found or unauthorized");
         }
+        assertDocumentReadyForAnalysis(document);
 
         // Get all agent outputs for this document
         const outputs = await getAgentOutputByDocumentId(documentId);
         return outputs;
       }),
+
+    /**
+     * Get saved agent runs for the current user.
+     */
+    listSavedRuns: protectedProcedure.query(async ({ ctx }) => {
+      const userDocuments = await getUserDocuments(ctx.user.id);
+      const documentById = new Map(userDocuments.map((document) => [document.id, document]));
+      const outputs = await getAgentOutputsByDocumentIds(userDocuments.map((document) => document.id));
+
+      return outputs.map((output) => {
+        const document = documentById.get(output.documentId);
+        return {
+          id: output.id,
+          documentId: output.documentId,
+          documentName: document?.fileName ?? "Deleted document",
+          agentId: output.agentId,
+          agentName: output.agentName,
+          output: output.output,
+          createdAt: output.createdAt,
+        };
+      });
+    }),
+
+    listFindings: protectedProcedure.query(async ({ ctx }) => {
+      const findings = await getAgentFindingsByUserId(ctx.user.id);
+      return findings.map((finding) => ({
+        id: finding.id,
+        runId: finding.runId,
+        outputId: finding.outputId,
+        agentId: finding.agentId,
+        agentName: finding.agentName,
+        title: finding.title,
+        findingType: finding.findingType,
+        liabilityVector: finding.liabilityVector,
+        remedyPath: finding.remedyPath,
+        severity: finding.severity,
+        confidence: finding.confidence,
+        leverageScore: finding.leverageScore,
+        summary: finding.summary,
+        sourceAnchors: safeJsonArray(finding.sourceAnchors),
+        missingRecords: safeJsonArray(finding.missingRecords),
+        legalAuthorities: safeJsonArray(finding.legalAuthorities),
+        nextAction: finding.nextAction,
+        qcStatus: finding.qcStatus,
+        qcReason: finding.qcReason,
+        includedInReports: Boolean(finding.includedInReports),
+        createdAt: finding.createdAt,
+      }));
+    }),
+
+    /**
+     * Delete one saved agent output.
+     */
+    deleteOutput: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const userDocuments = await getUserDocuments(ctx.user.id);
+        const outputs = await getAgentOutputsByDocumentIds(userDocuments.map((document) => document.id));
+        const target = outputs.find((output) => output.id === input.id);
+
+        if (!target) {
+          throw new Error("Saved output not found or unauthorized");
+        }
+
+        await deleteAgentOutputById(input.id);
+        return { success: true };
+      }),
+
+    /**
+     * Delete every saved agent output for the current user.
+     */
+    deleteSavedRuns: protectedProcedure.mutation(async ({ ctx }) => {
+      const userDocuments = await getUserDocuments(ctx.user.id);
+      await deleteAgentOutputsByDocumentIds(userDocuments.map((document) => document.id));
+      return { success: true };
+    }),
 
     /**
      * Process document with all agents in a sector (swarm processing)
@@ -124,12 +314,14 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { documentId, sector } = input;
         const userId = ctx.user.id;
+        await enforceAgentRunAccess(ctx.user, sector);
 
         // Get the document
         const document = await getDocumentById(documentId);
         if (!document || document.userId !== userId) {
           throw new Error("Document not found or unauthorized");
         }
+        assertDocumentReadyForAnalysis(document);
 
         // Get all agents for this sector
         const sectorAgents = getAgentsBySector(sector);
@@ -237,6 +429,333 @@ export const appRouter = router({
       }),
 
     /**
+     * Process a whole case, one document, or a time period with every agent in a sector.
+     */
+    processScope: protectedProcedure
+      .input(z.object({
+        sector: z.enum(["tactical", "legal", "intel", "evidence", "offensive"]),
+        scope: z.enum(["all", "file", "time"]),
+        documentId: z.number().optional(),
+        documentIds: z.array(z.number()).optional(),
+        agentIds: z.array(z.string()).optional(),
+        fromDate: z.string().optional(),
+        toDate: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const userId = ctx.user.id;
+        const allDocuments = await getUserDocuments(userId);
+        await enforceAgentRunAccess(ctx.user, input.sector);
+
+        const parseDateBound = (value: string | undefined, endOfDay: boolean): Date | null => {
+          if (!value) return null;
+          const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        const fromDate = parseDateBound(input.fromDate, false);
+        const toDate = parseDateBound(input.toDate, true);
+
+        let selectedDocuments = allDocuments;
+        const selectedDocumentIds = input.documentIds && input.documentIds.length > 0
+          ? Array.from(new Set(input.documentIds))
+          : input.documentId
+            ? [input.documentId]
+            : [];
+
+        if (input.scope === "file") {
+          if (selectedDocumentIds.length === 0) {
+            throw new Error("Choose one or more documents before running file analysis.");
+          }
+          selectedDocuments = allDocuments.filter((document) => selectedDocumentIds.includes(document.id));
+        }
+
+        if (input.scope === "time") {
+          if (!fromDate && !toDate) {
+            throw new Error("Choose a start date, end date, or both before running time-period analysis.");
+          }
+        }
+
+        if (selectedDocuments.length === 0) {
+          throw new Error("No matching documents found in your Corpus.");
+        }
+        selectedDocuments.forEach(assertDocumentReadyForAnalysis);
+
+        const hasCustomAgentSelection = Boolean(input.agentIds && input.agentIds.length > 0);
+        const isConfiguredOwner =
+          Boolean(process.env.OWNER_OPEN_ID) && ctx.user.openId === process.env.OWNER_OPEN_ID;
+        if (hasCustomAgentSelection && (ctx.user.role !== "admin" || !isConfiguredOwner)) {
+          throw new Error("Custom agent selection is only available to the configured owner/admin account.");
+        }
+
+        const customAgentIds = input.agentIds ? Array.from(new Set(input.agentIds)) : [];
+        const sectorAgents = hasCustomAgentSelection
+          ? customAgentIds.map((agentId) => getAgentById(agentId)).filter((agent): agent is AgentConfig => Boolean(agent))
+          : getAgentsBySector(input.sector);
+        if (sectorAgents.length === 0) {
+          throw new Error("No agents found for this analysis area.");
+        }
+
+        const contextLimit = 60000;
+        const perDocumentLimit = Math.max(2500, Math.floor(contextLimit / selectedDocuments.length));
+        const formatDate = (value: Date | string): string => {
+          const date = value instanceof Date ? value : new Date(value);
+          return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+        };
+
+        const caseRecord = selectedDocuments
+          .map((document, index) => {
+            const text = document.extractedText || document.summary || "[No extracted text available]";
+            return [
+              `DOCUMENT ${index + 1}`,
+              `File: ${document.fileName}`,
+              `Uploaded: ${formatDate(document.createdAt)}`,
+              `Document ID: ${document.id}`,
+              text.slice(0, perDocumentLimit),
+            ].join("\n");
+          })
+          .join("\n\n---\n\n")
+          .slice(0, contextLimit);
+
+        const anchorDocument = selectedDocuments[0];
+        const scopeLabel =
+          input.scope === "all"
+            ? "the entire case corpus"
+            : input.scope === "file"
+              ? "the selected file"
+              : "the selected time period";
+        const eraInstruction =
+          input.scope === "time"
+            ? `Focus on case events, facts, filings, and contradictions in this period: ${input.fromDate || "case start"} through ${input.toDate || "case end"}. Review every included document for references to that period even if the file was uploaded later.`
+            : "";
+
+        await updateDocumentStatus(anchorDocument.id, "processing");
+        const run = await createAgentRun({
+          userId,
+          anchorDocumentId: anchorDocument.id,
+          sector: input.sector,
+          scope: input.scope,
+          documentIds: JSON.stringify(selectedDocuments.map((document) => document.id)),
+          agentIds: JSON.stringify(sectorAgents.map((agent) => agent.id)),
+          status: "processing",
+          totalAgents: sectorAgents.length,
+          completedAgents: 0,
+          promptVersion: LEVERAGE_PROMPT_VERSION,
+        });
+        const allStructuredFindings: StructuredFinding[] = [];
+        let aggregatePromptTokens = 0;
+        let aggregateCompletionTokens = 0;
+        let aggregateTotalTokens = 0;
+        let aggregateCostCents = 0;
+        let modelName: string | null = null;
+
+        const recordUsage = async (agentId: string, operation: string, response: Awaited<ReturnType<typeof invokeLLM>>) => {
+          const usage = usageFromResponse(response);
+          modelName = usage.model || modelName;
+          aggregatePromptTokens += usage.promptTokens;
+          aggregateCompletionTokens += usage.completionTokens;
+          aggregateTotalTokens += usage.totalTokens;
+          aggregateCostCents += usage.estimatedCostCents;
+          if (usage.totalTokens > 0) {
+            await createLlmUsageEvent({
+              userId,
+              runId: run.id,
+              agentId,
+              operation,
+              model: usage.model,
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+              estimatedCostCents: usage.estimatedCostCents,
+            });
+          }
+        };
+
+        const processAgent = async (agent: AgentConfig) => {
+          const startTime = Date.now();
+          try {
+            const response = await invokeLLM({
+              responseFormat: { type: "json_object" },
+              messages: [
+                { role: "system", content: agent.systemPrompt },
+                {
+                  role: "user",
+                  content: buildStructuredAgentPrompt(agent, scopeLabel, eraInstruction, caseRecord),
+                },
+              ],
+            });
+            await recordUsage(agent.id, "structured_agent_analysis", response);
+
+            const messageContent = response.choices[0]?.message?.content;
+            const output = typeof messageContent === "string" ? messageContent : JSON.stringify(messageContent) || "No response generated";
+            const structured = parseStructuredAgentOutput(agent, output, selectedDocuments);
+            const processingTime = Date.now() - startTime;
+
+            const savedOutput = await createAgentOutput({
+              documentId: anchorDocument.id,
+              agentId: `${agent.id}_${input.scope}_scope`,
+              agentName: `${agent.name} (${scopeLabel})`,
+              output: structured.findings.length > 0
+                ? `${structured.summary}\n\n${structured.findings.map((finding, index) => `${index + 1}. ${finding.title}\nType: ${finding.findingType}\nConfidence: ${finding.confidence}\nLeverage: ${finding.leverageScore}\nQC: ${finding.qcStatus || "pending"}\n${finding.summary}\nNext: ${finding.nextAction}`).join("\n\n")}`
+                : output,
+            });
+
+            const savedFindings = [];
+            for (const finding of structured.findings) {
+              const gated = applyRiskBasedQcGate(verifyFindingQuotes(finding, selectedDocuments));
+              let finalFinding = gated;
+              const savedFinding = await createAgentFinding({
+                runId: run.id,
+                outputId: savedOutput.id,
+                userId,
+                agentId: agent.id,
+                agentName: agent.name,
+                title: gated.title,
+                findingType: gated.findingType,
+                liabilityVector: gated.liabilityVector,
+                remedyPath: gated.remedyPath,
+                severity: gated.severity,
+                confidence: gated.confidence,
+                leverageScore: gated.leverageScore,
+                summary: gated.summary,
+                sourceAnchors: JSON.stringify(gated.sourceAnchors),
+                missingRecords: JSON.stringify(gated.missingRecords),
+                legalAuthorities: JSON.stringify(gated.legalAuthorities),
+                nextAction: gated.nextAction,
+                qcStatus: gated.qcStatus || "not_required",
+                qcReason: gated.qcReason,
+                includedInReports: isReportEligible(gated.qcStatus) ? 1 : 0,
+              });
+
+              if (gated.qcStatus === "pending") {
+                try {
+                  const audit = normalizeQcAuditForReportUse(gated, await auditFindingWithLLM(gated, selectedDocuments));
+                  await createAgentFindingAudit({
+                    findingId: savedFinding.id,
+                    runId: run.id,
+                    auditorAgentId: "qc_auditor",
+                    status: audit.status,
+                    confidence: audit.confidence,
+                    issues: JSON.stringify(audit.issues),
+                    correctedSummary: audit.correctedSummary,
+                  });
+                  finalFinding = {
+                    ...gated,
+                    qcStatus: audit.status,
+                    confidence: audit.confidence,
+                    summary: audit.correctedSummary || gated.summary,
+                    qcReason: audit.issues.join("; ") || gated.qcReason,
+                  };
+                  await updateAgentFinding(savedFinding.id, {
+                    qcStatus: audit.status,
+                    confidence: audit.confidence,
+                    summary: finalFinding.summary,
+                    qcReason: finalFinding.qcReason,
+                    includedInReports: isReportEligible(audit.status) ? 1 : 0,
+                  });
+                } catch (auditError) {
+                  const audit = fallbackQcAuditForFinding(gated, auditError);
+                  finalFinding = {
+                    ...gated,
+                    qcStatus: audit.status,
+                    confidence: audit.confidence,
+                    summary: audit.correctedSummary || gated.summary,
+                    qcReason: audit.issues.join("; "),
+                  };
+                  await createAgentFindingAudit({
+                    findingId: savedFinding.id,
+                    runId: run.id,
+                    auditorAgentId: "qc_auditor_fallback",
+                    status: audit.status,
+                    confidence: audit.confidence,
+                    issues: JSON.stringify(audit.issues),
+                    correctedSummary: audit.correctedSummary,
+                  });
+                  await updateAgentFinding(savedFinding.id, {
+                    qcStatus: audit.status,
+                    confidence: audit.confidence,
+                    summary: finalFinding.summary,
+                    qcReason: finalFinding.qcReason,
+                    includedInReports: isReportEligible(audit.status) ? 1 : 0,
+                  });
+                }
+              }
+
+              allStructuredFindings.push(finalFinding);
+              savedFindings.push({
+                id: savedFinding.id,
+                ...finalFinding,
+              });
+            }
+
+            return {
+              status: "completed" as const,
+              agentId: agent.id,
+              agentName: agent.name,
+              output,
+              summary: structured.summary,
+              findings: savedFindings,
+              processingTime,
+            };
+          } catch (error) {
+            return {
+              status: "failed" as const,
+              agentId: agent.id,
+              agentName: agent.name,
+              error: error instanceof Error ? error.message : "Unknown analysis error",
+              processingTime: Date.now() - startTime,
+            };
+          }
+        };
+
+        const results = await Promise.all(sectorAgents.map(processAgent));
+        const completedCount = results.filter((result) => result.status === "completed").length;
+        const synthesis = buildWarRoomSynthesis(allStructuredFindings);
+        const returnedFindings = results.flatMap((result) => "findings" in result ? result.findings : []);
+
+        await updateDocumentStatus(
+          anchorDocument.id,
+          completedCount === sectorAgents.length ? "completed" : "failed",
+          `${completedCount}/${sectorAgents.length} ${input.sector} agents completed across ${selectedDocuments.length} document(s).`
+        );
+        await updateAgentRun(run.id, {
+          status: completedCount === sectorAgents.length ? "completed" : "failed",
+          completedAgents: completedCount,
+          completedAt: new Date(),
+          model: modelName,
+          promptTokens: aggregatePromptTokens,
+          completionTokens: aggregateCompletionTokens,
+          totalTokens: aggregateTotalTokens,
+          estimatedCostCents: aggregateCostCents,
+          synthesis,
+        });
+
+        return {
+          success: completedCount > 0,
+          runId: run.id,
+          sector: input.sector,
+          scope: input.scope,
+          documentCount: selectedDocuments.length,
+          documents: selectedDocuments.map((document) => ({
+            id: document.id,
+            fileName: document.fileName,
+            createdAt: formatDate(document.createdAt),
+          })),
+          completedAgents: completedCount,
+          totalAgents: sectorAgents.length,
+          findings: returnedFindings,
+          synthesis,
+          usage: {
+            model: modelName,
+            promptTokens: aggregatePromptTokens,
+            completionTokens: aggregateCompletionTokens,
+            totalTokens: aggregateTotalTokens,
+            estimatedCostCents: aggregateCostCents,
+          },
+          results,
+        };
+      }),
+
+    /**
      * Get swarm session results
      */
     getSwarmResults: protectedProcedure
@@ -315,6 +834,7 @@ export const appRouter = router({
         fileSize: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await enforceDocumentUploadLimit(ctx.user);
         // Upload to S3
         const buffer = Buffer.from(input.fileContent, 'base64');
         const randomSuffix = Math.random().toString(36).substring(7);
@@ -366,6 +886,7 @@ export const appRouter = router({
         documentText: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await enforceDraftAccess(ctx.user);
         const document = await getDocumentById(input.documentId);
         
         if (!document || document.userId !== ctx.user.id) {
@@ -376,80 +897,66 @@ export const appRouter = router({
         await updateDocumentStatus(input.documentId, "processing");
 
         try {
-          // Call LLM with the system prompt from blueprint
+          // Call LLM with a forensic legal analysis prompt. This replaces the
+          // legacy entertainment/product routing that is inappropriate for
+          // court documents.
           const response = await invokeLLM({
             messages: [
               {
                 role: "system",
-                content: `You are DueProcess.AI. When a user uploads a legal document, you route it to three sub-agents:
-1. **Justice Jester**: Create a meme caption, a TikTok script, and a satirical soundbite from the content.
-2. **Law Clerk**: Extract violations, cite case law, and write a draft motion (especially §1983 or ADA).
-3. **Hobot**: Turn the result into a monetizable digital product, merch drop, or legal toolkit.
+                content: `You are DueProcess AI, a forensic legal document analysis engine.
 
-You respond with a structured JSON containing all outputs.`
+Analyze the supplied legal document for constitutional, procedural, evidentiary, and civil-rights issues. Ground every finding in the document text. State findings directly, cite relevant legal authority when known, and distinguish strong record-supported findings from weaker issues that need more evidence.
+
+Do not produce satire, marketing ideas, social content, product ideas, or generic educational disclaimers. Produce practical legal-analysis artifacts: findings, authority, reasoning, and a motion scaffold.`
               },
               {
                 role: "user",
-                content: `Process this legal document through all agents. Summarize and display results.\n\nDocument:\n${input.documentText}`
+                content: `Analyze this legal document and return forensic findings.\n\nFilename: ${document.fileName}\n\nDocument:\n${input.documentText}`
               }
             ],
             response_format: {
               type: "json_schema",
               json_schema: {
-                name: "agent_outputs",
+                name: "forensic_document_analysis",
                 strict: true,
                 schema: {
                   type: "object",
                   properties: {
                     summary: {
                       type: "string",
-                      description: "Brief one-line overview"
+                      description: "Brief factual overview of the document and the most important finding"
                     },
-                    outputs: {
-                      type: "object",
-                      properties: {
-                        jester: {
-                          type: "object",
-                          properties: {
-                            meme_caption: { type: "string" },
-                            tiktok_script: { type: "string" },
-                            quote: { type: "string" }
-                          },
-                          required: ["meme_caption", "tiktok_script", "quote"],
-                          additionalProperties: false
+                    findings: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          issue: { type: "string" },
+                          severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+                          evidence: { type: "string" },
+                          reasoning: { type: "string" },
+                          recommendedAction: { type: "string" }
                         },
-                        clerk: {
-                          type: "object",
-                          properties: {
-                            violations: {
-                              type: "array",
-                              items: { type: "string" }
-                            },
-                            case_law: {
-                              type: "array",
-                              items: { type: "string" }
-                            },
-                            motion_draft: { type: "string" }
-                          },
-                          required: ["violations", "case_law", "motion_draft"],
-                          additionalProperties: false
+                        required: ["issue", "severity", "evidence", "reasoning", "recommendedAction"],
+                        additionalProperties: false
+                      }
+                    },
+                    authorities: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          citation: { type: "string" },
+                          relevance: { type: "string" }
                         },
-                        hobot: {
-                          type: "object",
-                          properties: {
-                            product_name: { type: "string" },
-                            description: { type: "string" },
-                            link: { type: "string" }
-                          },
-                          required: ["product_name", "description", "link"],
-                          additionalProperties: false
-                        }
-                      },
-                      required: ["jester", "clerk", "hobot"],
-                      additionalProperties: false
-                    }
+                        required: ["citation", "relevance"],
+                        additionalProperties: false
+                      }
+                    },
+                    motionScaffold: { type: "string" }
                   },
-                  required: ["summary", "outputs"],
+                  required: ["summary", "findings", "authorities", "motionScaffold"],
                   additionalProperties: false
                 }
               }
@@ -460,18 +967,19 @@ You respond with a structured JSON containing all outputs.`
           const contentString = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent);
           const result = JSON.parse(contentString || "{}");
 
-          // Store agent outputs
+          const findings = Array.isArray(result.findings) ? result.findings : [];
+          const authorities = Array.isArray(result.authorities) ? result.authorities : [];
+
+          // Store forensic output in both generic fields and legacy clerk fields
+          // so existing report/export code can continue to read it.
           await createAgentOutput({
             documentId: input.documentId,
-            jesterMemeCaption: result.outputs.jester.meme_caption,
-            jesterTiktokScript: result.outputs.jester.tiktok_script,
-            jesterQuote: result.outputs.jester.quote,
-            clerkViolations: JSON.stringify(result.outputs.clerk.violations),
-            clerkCaseLaw: JSON.stringify(result.outputs.clerk.case_law),
-            clerkMotionDraft: result.outputs.clerk.motion_draft,
-            hobotProductName: result.outputs.hobot.product_name,
-            hobotDescription: result.outputs.hobot.description,
-            hobotLink: result.outputs.hobot.link,
+            agentId: "forensic_document_analysis",
+            agentName: "Forensic Document Analysis",
+            output: JSON.stringify(result),
+            clerkViolations: JSON.stringify(findings.map((finding: { issue: string }) => finding.issue)),
+            clerkCaseLaw: JSON.stringify(authorities.map((authority: { citation: string; relevance: string }) => `${authority.citation}: ${authority.relevance}`)),
+            clerkMotionDraft: result.motionScaffold,
           });
 
           // Update document status to completed
@@ -530,4 +1038,3 @@ You respond with a structured JSON containing all outputs.`
 });
 
 export type AppRouter = typeof appRouter;
-

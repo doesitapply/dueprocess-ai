@@ -27,7 +27,7 @@ export const subscriptions = mysqlTable("subscriptions", {
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
   stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
   stripePriceId: varchar("stripePriceId", { length: 255 }),
-  plan: mysqlEnum("plan", ["free", "pro", "enterprise"]).default("free").notNull(),
+  plan: varchar("plan", { length: 255 }).default("free").notNull(),
   status: mysqlEnum("status", ["active", "canceled", "past_due", "trialing"]).default("active"),
   currentPeriodStart: timestamp("currentPeriodStart"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
@@ -50,7 +50,7 @@ export const payments = mysqlTable("payments", {
   amount: int("amount").notNull(), // in cents
   currency: varchar("currency", { length: 10 }).default("usd").notNull(),
   status: mysqlEnum("status", ["pending", "succeeded", "failed", "refunded"]).default("pending").notNull(),
-  plan: varchar("plan", { length: 50 }),
+  plan: varchar("plan", { length: 255 }),
   description: text("description"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -86,33 +86,131 @@ export type InsertDocument = typeof documents.$inferInsert;
 export const agentOutputs = mysqlTable("agent_outputs", {
   id: int("id").autoincrement().primaryKey(),
   documentId: int("documentId").notNull(),
-  
+
   // Generic agent fields (for new specialized agents)
   agentId: varchar("agentId", { length: 100 }),
   agentName: varchar("agentName", { length: 255 }),
   output: text("output"), // Full agent output
-  
+
   // Justice Jester outputs (legacy)
   jesterMemeCaption: text("jesterMemeCaption"),
   jesterTiktokScript: text("jesterTiktokScript"),
   jesterQuote: text("jesterQuote"),
-  
+
   // Law Clerk outputs (legacy)
   clerkViolations: text("clerkViolations"), // JSON array
   clerkCaseLaw: text("clerkCaseLaw"), // JSON array
   clerkMotionDraft: text("clerkMotionDraft"),
-  
+
   // Hobot outputs (legacy)
   hobotProductName: varchar("hobotProductName", { length: 255 }),
   hobotDescription: text("hobotDescription"),
   hobotLink: text("hobotLink"),
-  
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type AgentOutput = typeof agentOutputs.$inferSelect;
 export type InsertAgentOutput = typeof agentOutputs.$inferInsert;
+
+/**
+ * Run-level analysis records for the leverage engine.
+ */
+export const agentRuns = mysqlTable("agent_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  anchorDocumentId: int("anchorDocumentId").notNull(),
+  sector: varchar("sector", { length: 50 }).notNull(),
+  scope: mysqlEnum("scope", ["all", "file", "time"]).notNull(),
+  documentIds: text("documentIds").notNull(), // JSON array
+  agentIds: text("agentIds").notNull(), // JSON array
+  status: mysqlEnum("status", ["processing", "completed", "failed"]).default("processing").notNull(),
+  totalAgents: int("totalAgents").default(0).notNull(),
+  completedAgents: int("completedAgents").default(0).notNull(),
+  promptVersion: varchar("promptVersion", { length: 64 }).default("leverage-v1").notNull(),
+  model: varchar("model", { length: 100 }),
+  promptTokens: int("promptTokens").default(0).notNull(),
+  completionTokens: int("completionTokens").default(0).notNull(),
+  totalTokens: int("totalTokens").default(0).notNull(),
+  estimatedCostCents: int("estimatedCostCents").default(0).notNull(),
+  synthesis: text("synthesis"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type AgentRun = typeof agentRuns.$inferSelect;
+export type InsertAgentRun = typeof agentRuns.$inferInsert;
+
+/**
+ * Source-bound findings extracted from agent runs.
+ */
+export const agentFindings = mysqlTable("agent_findings", {
+  id: int("id").autoincrement().primaryKey(),
+  runId: int("runId").notNull(),
+  outputId: int("outputId"),
+  userId: int("userId").notNull(),
+  agentId: varchar("agentId", { length: 100 }).notNull(),
+  agentName: varchar("agentName", { length: 255 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  findingType: mysqlEnum("findingType", ["record_supported", "inference", "strong_inference", "weak_inference", "missing_record", "missing_critical", "suspicious_absence", "legal_authority", "contradiction", "adverse_fact"]).notNull(),
+  liabilityVector: varchar("liabilityVector", { length: 255 }),
+  remedyPath: varchar("remedyPath", { length: 255 }),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  confidence: int("confidence").default(0).notNull(),
+  leverageScore: int("leverageScore").default(0).notNull(),
+  summary: text("summary").notNull(),
+  sourceAnchors: text("sourceAnchors").notNull(), // JSON array
+  missingRecords: text("missingRecords"), // JSON array
+  legalAuthorities: text("legalAuthorities"), // JSON array
+  nextAction: text("nextAction"),
+  qcStatus: mysqlEnum("qcStatus", ["not_required", "pending", "approved", "downgraded", "needs_more_proof", "blocked"]).default("not_required").notNull(),
+  qcReason: text("qcReason"),
+  includedInReports: int("includedInReports").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AgentFinding = typeof agentFindings.$inferSelect;
+export type InsertAgentFinding = typeof agentFindings.$inferInsert;
+
+/**
+ * QC audit records for high-risk or low-confidence findings.
+ */
+export const agentFindingAudits = mysqlTable("agent_finding_audits", {
+  id: int("id").autoincrement().primaryKey(),
+  findingId: int("findingId").notNull(),
+  runId: int("runId").notNull(),
+  auditorAgentId: varchar("auditorAgentId", { length: 100 }).default("qc_auditor").notNull(),
+  status: mysqlEnum("status", ["approved", "downgraded", "needs_more_proof", "blocked"]).notNull(),
+  confidence: int("confidence").default(0).notNull(),
+  issues: text("issues"), // JSON array
+  correctedSummary: text("correctedSummary"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgentFindingAudit = typeof agentFindingAudits.$inferSelect;
+export type InsertAgentFindingAudit = typeof agentFindingAudits.$inferInsert;
+
+/**
+ * Exact LLM token telemetry captured from provider responses.
+ */
+export const llmUsageEvents = mysqlTable("llm_usage_events", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  runId: int("runId"),
+  agentId: varchar("agentId", { length: 100 }),
+  operation: varchar("operation", { length: 100 }).notNull(),
+  model: varchar("model", { length: 100 }),
+  promptTokens: int("promptTokens").default(0).notNull(),
+  completionTokens: int("completionTokens").default(0).notNull(),
+  totalTokens: int("totalTokens").default(0).notNull(),
+  estimatedCostCents: int("estimatedCostCents").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LlmUsageEvent = typeof llmUsageEvents.$inferSelect;
+export type InsertLlmUsageEvent = typeof llmUsageEvents.$inferInsert;
 
 /**
  * Agent divisions for specialized legal analysis
@@ -292,4 +390,3 @@ export const swarmAgentResults = mysqlTable("swarm_agent_results", {
 
 export type SwarmAgentResult = typeof swarmAgentResults.$inferSelect;
 export type InsertSwarmAgentResult = typeof swarmAgentResults.$inferInsert;
-

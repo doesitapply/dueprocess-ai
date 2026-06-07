@@ -3,14 +3,20 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, import.meta.dirname, "");
+  const plugins = [react(), tailwindcss()];
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+  if (env.ENABLE_MANUS_RUNTIME === "1" && env.VITE_APP_ID) {
+    plugins.push(jsxLocPlugin());
+    plugins.push(vitePluginManusRuntime());
+  }
 
-export default defineConfig({
-  plugins,
+  return {
+    plugins,
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -41,4 +47,5 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  };
 });

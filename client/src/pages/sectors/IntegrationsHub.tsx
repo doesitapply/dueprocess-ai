@@ -111,7 +111,7 @@ export default function IntegrationsHub() {
           <Link href="/dashboard">
             <Button variant="ghost" className="text-cyan-400 hover:text-cyan-300 gap-2">
               <ArrowLeft className="w-4 h-4" />
-              BACK TO COMMAND CENTER
+              Back to Dashboard
             </Button>
           </Link>
           <div className="flex items-center gap-3">
@@ -263,4 +263,3 @@ export default function IntegrationsHub() {
     </div>
   );
 }
-

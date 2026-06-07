@@ -1,11 +1,18 @@
 import express from "express";
 import Stripe from "stripe";
 import { upsertSubscription, updatePaymentStatus, getSubscriptionByStripeId } from "./db";
-import { PRICING_PLANS } from "./products";
+import { getSubscriptionByPriceId } from "./products";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-10-29.clover",
-});
+function getStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("STRIPE_SECRET_KEY is not configured.");
+  }
+
+  return new Stripe(secretKey, {
+    apiVersion: "2025-10-29.clover",
+  });
+}
 
 export function setupStripeWebhook(app: express.Application) {
   // Stripe webhook endpoint - MUST be before express.json() middleware
@@ -23,6 +30,7 @@ export function setupStripeWebhook(app: express.Application) {
       let event: Stripe.Event;
 
       try {
+        const stripe = getStripeClient();
         event = stripe.webhooks.constructEvent(
           req.body,
           sig,
@@ -36,6 +44,7 @@ export function setupStripeWebhook(app: express.Application) {
       console.log(`[Stripe Webhook] Received event: ${event.type}`);
 
       try {
+        const stripe = getStripeClient();
         switch (event.type) {
           case "checkout.session.completed": {
             const session = event.data.object as Stripe.Checkout.Session;
@@ -48,27 +57,29 @@ export function setupStripeWebhook(app: express.Application) {
 
             // Handle subscription creation
             if (session.mode === "subscription" && session.subscription) {
-              const subscriptionId = typeof session.subscription === "string" 
-                ? session.subscription 
+              const subscriptionId = typeof session.subscription === "string"
+                ? session.subscription
                 : session.subscription.id;
 
               const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-              const userId = parseInt(session.metadata?.user_id || "0");
-              const planId = session.metadata?.plan_id || "pro";
+              const userId = parseInt(session.metadata?.user_id || "0", 10);
+              const stripePriceId = subscription.items.data[0].price.id;
+              const purchasedPlan = getSubscriptionByPriceId(stripePriceId);
+              const planId = purchasedPlan?.id || session.metadata?.plan_id || "pro";
 
               if (userId > 0) {
                 await upsertSubscription({
                   userId,
                   stripeCustomerId: subscription.customer as string,
                   stripeSubscriptionId: subscription.id,
-                  stripePriceId: subscription.items.data[0].price.id,
+                  stripePriceId,
                   plan: planId as any,
                   status: "active",
                   currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
                   currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
                   cancelAtPeriodEnd: subscription.cancel_at_period_end ? 1 : 0,
                 });
-                console.log(`[Stripe] Subscription created for user ${userId}`);
+                console.log(`[Stripe] Updated user ${userId} to plan ${planId}`);
               }
             }
             break;
@@ -145,4 +156,3 @@ export function setupStripeWebhook(app: express.Application) {
 
   console.log("[Stripe] Webhook handler registered at /api/stripe/webhook");
 }
-
