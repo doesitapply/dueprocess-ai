@@ -25,6 +25,16 @@ type CorpusDocumentRecord = {
   extractionWarnings?: string | null;
 };
 
+const ANALYSIS_READY_MIN_TEXT_LENGTH = 100;
+const ANALYSIS_READY_MIN_QUALITY_SCORE = 70;
+const ANALYSIS_BLOCKING_WARNINGS = new Set([
+  "extraction_failed",
+  "missing_source_hash",
+  "empty_extracted_text",
+  "very_short_extracted_text",
+  "low_text_signal",
+]);
+
 function getInitialStatusFilter(): StatusFilter {
   if (typeof window === "undefined") return "all";
   const value = new URLSearchParams(window.location.search).get("status");
@@ -56,12 +66,22 @@ function qualityScore(doc: CorpusDocumentRecord) {
   if (doc.status !== "completed") return 0;
   let score = 100;
   if (!sourceAnchored(doc)) score -= 45;
-  if (extractedLength(doc) === 0) score -= 80;
+  const length = extractedLength(doc);
+  if (length === 0) score -= 80;
+  else if (length < ANALYSIS_READY_MIN_TEXT_LENGTH) score -= 25;
+  else if (length < 500) score -= 10;
   return Math.max(0, Math.min(100, score));
 }
 
 function isReady(doc: CorpusDocumentRecord) {
-  return doc.status === "completed" && sourceAnchored(doc) && extractedLength(doc) > 0 && qualityScore(doc) >= 25;
+  const warnings = parseWarnings(doc.extractionWarnings);
+  return (
+    doc.status === "completed" &&
+    sourceAnchored(doc) &&
+    extractedLength(doc) >= ANALYSIS_READY_MIN_TEXT_LENGTH &&
+    qualityScore(doc) >= ANALYSIS_READY_MIN_QUALITY_SCORE &&
+    !warnings.some((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning))
+  );
 }
 
 function isActive(doc: CorpusDocumentRecord) {
@@ -87,7 +107,9 @@ function readinessDetail(doc: CorpusDocumentRecord) {
   if (isReady(doc) && warnings.length === 0) return "Anchored text is ready for agents";
   if (!sourceAnchored(doc)) return "Missing source hash; retry OCR before analysis";
   if (extractedLength(doc) === 0) return "No extracted text; retry OCR or upload cleaner copy";
-  if (qualityScore(doc) < 70) return "Review OCR quality before running agents";
+  if (extractedLength(doc) < ANALYSIS_READY_MIN_TEXT_LENGTH) return `Only ${extractedLength(doc).toLocaleString()} characters extracted; review OCR before analysis`;
+  if (warnings.includes("low_text_signal")) return "Low-signal OCR text; retry OCR or upload cleaner copy";
+  if (qualityScore(doc) < ANALYSIS_READY_MIN_QUALITY_SCORE) return "Review OCR quality before running agents";
   return warnings[0]?.replace(/_/g, " ") || "Review extraction details";
 }
 

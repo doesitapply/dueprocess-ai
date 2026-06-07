@@ -113,6 +113,16 @@ type FindingCardData = {
   createdAt?: Date | string;
 };
 
+const ANALYSIS_READY_MIN_TEXT_LENGTH = 100;
+const ANALYSIS_READY_MIN_QUALITY_SCORE = 70;
+const ANALYSIS_BLOCKING_WARNINGS = new Set([
+  "extraction_failed",
+  "missing_source_hash",
+  "empty_extracted_text",
+  "very_short_extracted_text",
+  "low_text_signal",
+]);
+
 const scopeOptions: Array<{ id: AnalysisScope; label: string; description: string; icon: typeof FolderSearch }> = [
   {
     id: "all",
@@ -285,8 +295,25 @@ function uniqueIds(ids: string[]): string[] {
   return Array.from(new Set(ids));
 }
 
+function parseStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function isAnalysisReady(document: CorpusDocument): boolean {
-  return document.status === "completed" && sourceAnchored(document) && extractedLength(document) > 0 && qualityScore(document) >= 25;
+  const warnings = parseStringArray(document.extractionWarnings);
+  return (
+    document.status === "completed" &&
+    sourceAnchored(document) &&
+    extractedLength(document) >= ANALYSIS_READY_MIN_TEXT_LENGTH &&
+    qualityScore(document) >= ANALYSIS_READY_MIN_QUALITY_SCORE &&
+    !warnings.some((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning))
+  );
 }
 
 function sourceAnchored(document: CorpusDocument): boolean {
@@ -303,7 +330,10 @@ function qualityScore(document: CorpusDocument): number {
   if (document.status !== "completed") return 0;
   let score = 100;
   if (!sourceAnchored(document)) score -= 45;
-  if (extractedLength(document) === 0) score -= 80;
+  const length = extractedLength(document);
+  if (length === 0) score -= 80;
+  else if (length < ANALYSIS_READY_MIN_TEXT_LENGTH) score -= 25;
+  else if (length < 500) score -= 10;
   return Math.max(0, Math.min(100, score));
 }
 

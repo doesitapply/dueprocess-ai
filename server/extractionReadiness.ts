@@ -21,13 +21,34 @@ export type AnalysisReadyDocument = {
   fileName?: string | null;
   extractedText?: string | null;
   documentHash?: string | null;
+  extractionMethod?: string | null;
   extractionQualityScore?: number | null;
+  extractionWarnings?: string | null;
 };
 
 const SOURCE_HASH_PATTERN = /^SOURCE_SHA256:\s*([a-f0-9]{64})\s*$/im;
+export const ANALYSIS_READY_MIN_TEXT_LENGTH = 100;
+export const ANALYSIS_READY_MIN_QUALITY_SCORE = 70;
+const ANALYSIS_BLOCKING_WARNINGS = new Set([
+  "extraction_failed",
+  "missing_source_hash",
+  "empty_extracted_text",
+  "very_short_extracted_text",
+  "low_text_signal",
+]);
 
 function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseWarningList(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 export function normalizeExtractedText(text: string) {
@@ -69,7 +90,7 @@ export function analyzeExtractionDiagnostics(
   if (extraction.status !== "completed") warnings.push("extraction_failed");
   if (!resolvedHash) warnings.push("missing_source_hash");
   if (!body) warnings.push("empty_extracted_text");
-  if (body && body.length < 100) warnings.push("very_short_extracted_text");
+  if (body && body.length < ANALYSIS_READY_MIN_TEXT_LENGTH) warnings.push("very_short_extracted_text");
   if (extraction.method.includes("vision_ocr")) warnings.push("vision_ocr_used");
 
   const replacementCharacters = (body.match(/\uFFFD/g) || []).length;
@@ -83,7 +104,7 @@ export function analyzeExtractionDiagnostics(
   let qualityScore = extraction.status === "completed" ? 100 : 0;
   if (!resolvedHash) qualityScore -= 45;
   if (!body) qualityScore -= 80;
-  else if (body.length < 100) qualityScore -= 25;
+  else if (body.length < ANALYSIS_READY_MIN_TEXT_LENGTH) qualityScore -= 25;
   else if (body.length < 500) qualityScore -= 10;
   if (replacementCharacters > 0) qualityScore -= Math.min(20, replacementCharacters * 2);
   if (body.length > 50 && alphanumericRatio < 0.35) qualityScore -= 25;
@@ -102,34 +123,42 @@ export function inferExtractionDiagnostics(document: AnalysisReadyDocument): Ext
   const embeddedHash = sourceHashFromText(document.extractedText);
   const body = extractedTextBody(document.extractedText);
   const hash = (document.documentHash || embeddedHash)?.toLowerCase() ?? null;
-  const score = document.extractionQualityScore ?? analyzeExtractionDiagnostics(
+  const computedDiagnostics = analyzeExtractionDiagnostics(
     {
       text: document.extractedText || "",
-      method: "legacy_unknown",
+      method: document.extractionMethod || "legacy_unknown",
       status: document.status === "completed" ? "completed" : "failed",
     },
     hash
-  ).qualityScore;
+  );
+  const score = document.extractionQualityScore ?? computedDiagnostics.qualityScore;
 
-  const warnings: string[] = [];
-  if (!hash) warnings.push("missing_source_hash");
-  if (!body) warnings.push("empty_extracted_text");
-  if (score < 70) warnings.push("review_extraction_quality");
+  const warnings = new Set([...computedDiagnostics.warnings, ...parseWarningList(document.extractionWarnings)]);
+  if (!hash) warnings.add("missing_source_hash");
+  if (!body) warnings.add("empty_extracted_text");
+  if (body && body.length < ANALYSIS_READY_MIN_TEXT_LENGTH) warnings.add("very_short_extracted_text");
+  if (score < ANALYSIS_READY_MIN_QUALITY_SCORE) warnings.add("review_extraction_quality");
 
   return {
     documentHash: hash,
-    extractionMethod: "legacy_unknown",
+    extractionMethod: document.extractionMethod || "legacy_unknown",
     extractionNote: null,
     textLength: body.length,
     qualityScore: clampScore(score),
-    warnings: Array.from(new Set(warnings)),
+    warnings: Array.from(warnings),
   };
 }
 
 export function isDocumentReadyForAnalysis(document: AnalysisReadyDocument): boolean {
   if (document.status !== "completed") return false;
   const diagnostics = inferExtractionDiagnostics(document);
-  return Boolean(diagnostics.documentHash) && diagnostics.textLength > 0 && diagnostics.qualityScore >= 25;
+  const hasBlockingWarning = diagnostics.warnings.some((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning));
+  return (
+    Boolean(diagnostics.documentHash) &&
+    diagnostics.textLength >= ANALYSIS_READY_MIN_TEXT_LENGTH &&
+    diagnostics.qualityScore >= ANALYSIS_READY_MIN_QUALITY_SCORE &&
+    !hasBlockingWarning
+  );
 }
 
 export function documentReadinessReason(document: AnalysisReadyDocument): string | null {
@@ -144,7 +173,13 @@ export function documentReadinessReason(document: AnalysisReadyDocument): string
   if (!diagnostics.documentHash) {
     return `${document.fileName || "Document"} is missing a source hash. Retry OCR before analysis so findings can be anchored.`;
   }
-  if (diagnostics.qualityScore < 25) {
+  if (diagnostics.textLength < ANALYSIS_READY_MIN_TEXT_LENGTH) {
+    return `${document.fileName || "Document"} only has ${diagnostics.textLength} extracted characters. Review OCR or upload a cleaner copy before agent analysis.`;
+  }
+  if (diagnostics.warnings.includes("low_text_signal")) {
+    return `${document.fileName || "Document"} has low-signal extracted text. Review OCR before agent analysis.`;
+  }
+  if (diagnostics.qualityScore < ANALYSIS_READY_MIN_QUALITY_SCORE) {
     return `${document.fileName || "Document"} has low extraction quality. Review extracted text before analysis.`;
   }
   return null;

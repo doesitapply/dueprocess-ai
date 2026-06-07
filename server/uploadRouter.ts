@@ -11,6 +11,7 @@ import { PDFParse } from "pdf-parse";
 import { enforceDocumentUploadLimit } from "./accessControl";
 import {
   analyzeExtractionDiagnostics,
+  isDocumentReadyForAnalysis,
   normalizeExtractedText,
   withSourceAnchor,
   type ExtractionResultForDiagnostics,
@@ -276,8 +277,17 @@ export const uploadRouter = router({
           },
           duplicate.documentHash || documentHash
         );
+        const duplicateReady = isDocumentReadyForAnalysis({
+          status: duplicate.status,
+          extractedText: duplicate.extractedText,
+          documentHash: diagnostics.documentHash || duplicate.documentHash || documentHash,
+          extractionMethod: duplicate.extractionMethod || "duplicate",
+          extractionQualityScore: diagnostics.qualityScore,
+          extractionWarnings: duplicate.extractionWarnings,
+        });
         return {
-          success: duplicate.status === "completed" && diagnostics.textLength > 0 && Boolean(diagnostics.documentHash),
+          success: duplicateReady,
+          extractionCompleted: duplicate.status === "completed",
           duplicate: true,
           existingDocumentId: duplicate.id,
           fileUrl: duplicate.fileUrl,
@@ -331,11 +341,20 @@ export const uploadRouter = router({
       const embedding = extractedText ? await generateEmbedding(extractedText) : [];
       const embeddingJson = JSON.stringify(embedding);
       const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
+      const extractionWarningsJson = JSON.stringify(diagnostics.warnings);
 
       // Generate summary using LLM
       let summary = await summarizeExtractedText(extractedText);
       const documentStatus = extraction.status;
       summary = appendExtractionSummary(summary, extraction);
+      const analysisReady = isDocumentReadyForAnalysis({
+        status: documentStatus,
+        extractedText,
+        documentHash: diagnostics.documentHash || documentHash,
+        extractionMethod: diagnostics.extractionMethod,
+        extractionQualityScore: diagnostics.qualityScore,
+        extractionWarnings: extractionWarningsJson,
+      });
 
       await db.insert(documents).values({
         userId,
@@ -349,7 +368,7 @@ export const uploadRouter = router({
         extractionNote: diagnostics.extractionNote,
         extractionTextLength: diagnostics.textLength,
         extractionQualityScore: diagnostics.qualityScore,
-        extractionWarnings: JSON.stringify(diagnostics.warnings),
+        extractionWarnings: extractionWarningsJson,
         extractedText,
         embedding: embeddingJson,
         summary,
@@ -357,7 +376,8 @@ export const uploadRouter = router({
       });
 
       return {
-        success: documentStatus === "completed",
+        success: analysisReady,
+        extractionCompleted: documentStatus === "completed",
         fileUrl,
         documentHash,
         status: documentStatus,
@@ -399,9 +419,18 @@ export const uploadRouter = router({
           documentHash
         );
         const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
+        const extractionWarningsJson = JSON.stringify(diagnostics.warnings);
         const embedding = extraction.text ? await generateEmbedding(extraction.text) : [];
         let summary = await summarizeExtractedText(extraction.text);
         summary = appendExtractionSummary(summary, extraction);
+        const analysisReady = isDocumentReadyForAnalysis({
+          status: extraction.status,
+          extractedText: extraction.text,
+          documentHash: diagnostics.documentHash || documentHash,
+          extractionMethod: diagnostics.extractionMethod,
+          extractionQualityScore: diagnostics.qualityScore,
+          extractionWarnings: extractionWarningsJson,
+        });
 
         await db
           .update(documents)
@@ -411,7 +440,7 @@ export const uploadRouter = router({
             extractionNote: diagnostics.extractionNote,
             extractionTextLength: diagnostics.textLength,
             extractionQualityScore: diagnostics.qualityScore,
-            extractionWarnings: JSON.stringify(diagnostics.warnings),
+            extractionWarnings: extractionWarningsJson,
             extractedText: extraction.text,
             embedding: JSON.stringify(embedding),
             summary,
@@ -420,7 +449,8 @@ export const uploadRouter = router({
           .where(eq(documents.id, document.id));
 
         return {
-          success: extraction.status === "completed",
+          success: analysisReady,
+          extractionCompleted: extraction.status === "completed",
           status: extraction.status,
           documentHash,
           extractionMethod: extraction.method,
@@ -447,6 +477,7 @@ export const uploadRouter = router({
           .where(eq(documents.id, document.id));
         return {
           success: false,
+          extractionCompleted: false,
           status: "failed" as const,
           extractionMethod: extraction.method,
           extractionNote: extraction.note,

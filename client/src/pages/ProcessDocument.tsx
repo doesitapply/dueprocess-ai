@@ -44,6 +44,16 @@ type ExtractionDocument = {
   extractionWarnings?: string | null;
 };
 
+const ANALYSIS_READY_MIN_TEXT_LENGTH = 100;
+const ANALYSIS_READY_MIN_QUALITY_SCORE = 70;
+const ANALYSIS_BLOCKING_WARNINGS = new Set([
+  "extraction_failed",
+  "missing_source_hash",
+  "empty_extracted_text",
+  "very_short_extracted_text",
+  "low_text_signal",
+]);
+
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
   try {
@@ -72,12 +82,22 @@ function qualityScore(document: ExtractionDocument) {
   if (document.status !== "completed") return 0;
   let score = 100;
   if (!sourceAnchored(document)) score -= 45;
-  if (extractedLength(document) === 0) score -= 80;
+  const length = extractedLength(document);
+  if (length === 0) score -= 80;
+  else if (length < ANALYSIS_READY_MIN_TEXT_LENGTH) score -= 25;
+  else if (length < 500) score -= 10;
   return Math.max(0, Math.min(100, score));
 }
 
 function isAnalysisReady(document: ExtractionDocument) {
-  return document.status === "completed" && sourceAnchored(document) && extractedLength(document) > 0 && qualityScore(document) >= 25;
+  const warnings = extractionWarnings(document);
+  return (
+    document.status === "completed" &&
+    sourceAnchored(document) &&
+    extractedLength(document) >= ANALYSIS_READY_MIN_TEXT_LENGTH &&
+    qualityScore(document) >= ANALYSIS_READY_MIN_QUALITY_SCORE &&
+    !warnings.some((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning))
+  );
 }
 
 function parseForensicAnalysis(output: string | null | undefined): ForensicAnalysis | null {
@@ -311,6 +331,9 @@ export default function ProcessDocument() {
                 {document.extractionNote && <p>{document.extractionNote}</p>}
                 {!sourceAnchored(document) && <p>Missing source hash. Retry OCR before using this file in multi-agent analysis.</p>}
                 {extractedLength(document) === 0 && <p>No extracted text is available. Retry OCR or paste verified text below.</p>}
+                {extractedLength(document) > 0 && extractedLength(document) < ANALYSIS_READY_MIN_TEXT_LENGTH && <p>Only {extractedLength(document).toLocaleString()} characters were extracted. Review OCR before agent analysis.</p>}
+                {warnings.includes("low_text_signal") && <p>The extracted text has low readable signal. Retry OCR or upload a cleaner copy.</p>}
+                {qualityScore(document) < ANALYSIS_READY_MIN_QUALITY_SCORE && <p>OCR quality is below the analysis-ready threshold.</p>}
                 {warnings.length > 0 && <p>Warnings: {warnings.map(warning => warning.replace(/_/g, " ")).join(", ")}</p>}
               </div>
             )}

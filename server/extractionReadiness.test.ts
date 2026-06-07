@@ -37,11 +37,45 @@ describe("extraction readiness", () => {
   });
 
   it("keeps OCR fallback visible without blocking usable anchored text", () => {
-    const text = withSourceAnchor("Scanned motion text with names, dates, exhibit labels, and enough content to support a cautious review.", hash);
+    const text = withSourceAnchor(
+      "Scanned motion text with names, dates, exhibit labels, hearing notes, orders, party names, and enough content to support a cautious first-pass review by source-bound agents.",
+      hash
+    );
     const diagnostics = analyzeExtractionDiagnostics({ text, method: "pdf_vision_ocr", status: "completed", note: "Vision OCR fallback used." }, hash);
 
     expect(diagnostics.warnings).toContain("vision_ocr_used");
     expect(isDocumentReadyForAnalysis({ status: "completed", extractedText: text, documentHash: hash, extractionQualityScore: diagnostics.qualityScore })).toBe(true);
+  });
+
+  it("blocks very short anchored extraction from agent analysis", () => {
+    const text = withSourceAnchor("Order entered. Hearing reset.", hash);
+    const diagnostics = analyzeExtractionDiagnostics({ text, method: "pdf_text", status: "completed" }, hash);
+
+    expect(diagnostics.warnings).toContain("very_short_extracted_text");
+    expect(diagnostics.qualityScore).toBeGreaterThanOrEqual(70);
+    expect(isDocumentReadyForAnalysis({ status: "completed", fileName: "short-order.pdf", extractedText: text, documentHash: hash, extractionQualityScore: diagnostics.qualityScore })).toBe(false);
+    expect(documentReadinessReason({ status: "completed", fileName: "short-order.pdf", extractedText: text, documentHash: hash, extractionQualityScore: diagnostics.qualityScore })).toContain("only has");
+  });
+
+  it("blocks persisted low-signal OCR warnings even when the score looks high", () => {
+    const text = withSourceAnchor("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", hash);
+
+    expect(isDocumentReadyForAnalysis({
+      status: "completed",
+      fileName: "bad-scan.png",
+      extractedText: text,
+      documentHash: hash,
+      extractionQualityScore: 95,
+      extractionWarnings: JSON.stringify(["low_text_signal"]),
+    })).toBe(false);
+    expect(documentReadinessReason({
+      status: "completed",
+      fileName: "bad-scan.png",
+      extractedText: text,
+      documentHash: hash,
+      extractionQualityScore: 95,
+      extractionWarnings: JSON.stringify(["low_text_signal"]),
+    })).toContain("low-signal");
   });
 
   it("blocks failed or empty extraction", () => {
