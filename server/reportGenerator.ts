@@ -6,6 +6,7 @@ import { agentFindings, agentOutputs, documents } from "../drizzle/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { isReportEligible, usageFromResponse } from "./leverageEngine";
+import { isDocumentReadyForAnalysis } from "./extractionReadiness";
 import {
   buildReportExportArtifact,
   markdownToReportHtml,
@@ -112,6 +113,24 @@ function outputText(output: AgentOutputRecord): string {
   return parts.join("\n\n");
 }
 
+function reportSourceDigest(document: DocumentRecord, includeRawDocumentText: boolean): string {
+  const metadata = [
+    `File: ${document.fileName}`,
+    `Status: ${document.status}`,
+    `Uploaded: ${formatDate(document.createdAt)}`,
+    `Document ID: ${document.id}`,
+    `Source hash: ${document.documentHash || "missing"}`,
+    `Extraction quality: ${document.extractionQualityScore ?? 0}/100`,
+  ].join("\n");
+
+  if (!includeRawDocumentText) {
+    return `${metadata}\nRaw extracted text withheld from report-generation context. Use QC-cleared findings and source anchors for factual claims.`;
+  }
+
+  const text = document.extractedText || document.summary || "[No extracted text saved]";
+  return `${metadata}\n${text.slice(0, 4000)}`;
+}
+
 function safeJsonArray(value: string | null): unknown[] {
   if (!value) return [];
   try {
@@ -158,6 +177,7 @@ function savedReportSummary(report: NonNullable<GeneratedReportRecord>) {
       readyDocuments: Number(statistics.readyDocuments ?? 0),
       structuredFindings: Number(statistics.structuredFindings ?? 0),
       blockedFindingsIncluded: Boolean(statistics.blockedFindingsIncluded),
+      legacyAgentOutputsIncluded: Boolean(statistics.legacyAgentOutputsIncluded),
     },
     availableExportFormats: ["markdown", "html", "json", "pdf", "docx"] as const,
     createdAt: report.createdAt,
@@ -204,7 +224,7 @@ function findingText(finding: AgentFindingRecord): string {
   ].filter(Boolean).join("\n");
 }
 
-function buildPlainReport(data: {
+export function buildPlainReport(data: {
   title: string;
   generatedAt: string;
   generatedBy: string;
@@ -212,19 +232,29 @@ function buildPlainReport(data: {
   template: ReportTemplate;
   documents: DocumentRecord[];
   outputs: AgentOutputRecord[];
+  legacyAgentOutputsIncluded: boolean;
+  legacyAgentOutputsAvailable: number;
   findings: AgentFindingRecord[];
   executiveSummary: string;
 }): string {
   const sourceList = data.documents
-    .map((document, index) => `${index + 1}. ${document.fileName} (${document.status}, uploaded ${formatDate(document.createdAt)})`)
+    .map((document, index) => {
+      const readiness = isDocumentReadyForAnalysis(document) ? "analysis-ready" : "needs extraction review";
+      return `${index + 1}. ${document.fileName} (${readiness}, uploaded ${formatDate(document.createdAt)}, SHA ${document.documentHash || "missing"}, OCR ${document.extractionQualityScore ?? 0}/100)`;
+    })
     .join("\n");
 
-  const outputList = data.outputs
-    .map((output, index) => {
-      const body = outputText(output);
-      return `### ${index + 1}. ${output.agentName || output.agentId || "Agent Output"}\nDocument ID: ${output.documentId}\nSaved: ${formatDate(output.createdAt)}\n\n${body || "No saved output text."}`;
-    })
-    .join("\n\n");
+  const outputList = data.legacyAgentOutputsIncluded
+    ? data.outputs
+        .map((output, index) => {
+          const body = outputText(output);
+          return `### ${index + 1}. ${output.agentName || output.agentId || "Agent Output"}\nDocument ID: ${output.documentId}\nSaved: ${formatDate(output.createdAt)}\n\n${body || "No saved output text."}`;
+        })
+        .join("\n\n")
+    : [
+        `${data.legacyAgentOutputsAvailable} saved legacy/freeform agent output${data.legacyAgentOutputsAvailable === 1 ? " was" : "s were"} excluded from this report.`,
+        "Default reports use QC-cleared structured findings only. Legacy outputs can be useful brainstorming material, but they are not treated as court-ready findings.",
+      ].join("\n");
 
   return [
     `# ${data.title}`,
@@ -239,7 +269,7 @@ function buildPlainReport(data: {
     "## Source Documents",
     sourceList || "No source documents selected.",
     "",
-    "## Saved Agent Analysis",
+    "## Legacy / Freeform Agent Outputs",
     outputList || "No saved agent outputs were available for the selected scope.",
     "",
     "## QC-Cleared Structured Findings",
@@ -351,6 +381,7 @@ export const reportRouter = router({
         selectedFindingIds: z.array(z.number()).optional(),
         minConfidence: z.number().min(0).max(100).default(0),
         includeBlockedFindings: z.boolean().default(false),
+        includeLegacyAgentOutputs: z.boolean().default(false),
         branding: z
           .object({
             logo: z.string().optional(),
@@ -376,21 +407,21 @@ export const reportRouter = router({
       }
 
       const outputs = await getOutputsForDocuments(selectedDocuments.map((document) => document.id));
+      const legacyAgentOutputsIncluded = ctx.user.role === "admin" && input.includeLegacyAgentOutputs;
+      const blockedFindingsIncluded = ctx.user.role === "admin" && input.includeBlockedFindings;
+      const outputsForReport = legacyAgentOutputsIncluded ? outputs : [];
       const findings = await getFindingsForScope({
         userId: ctx.user.id,
         documentIds: selectedDocuments.map((document) => document.id),
         selectedFindingIds: input.selectedFindingIds,
         minConfidence: input.minConfidence,
-        includeBlockedFindings: ctx.user.role === "admin" && input.includeBlockedFindings,
+        includeBlockedFindings: blockedFindingsIncluded,
       });
       const evidenceDigest = selectedDocuments
-        .map((document, index) => {
-          const text = document.extractedText || document.summary || "[No extracted text saved]";
-          return `DOCUMENT ${index + 1}: ${document.fileName}\nStatus: ${document.status}\nUploaded: ${formatDate(document.createdAt)}\n${text.slice(0, 4000)}`;
-        })
+        .map((document, index) => `DOCUMENT ${index + 1}\n${reportSourceDigest(document, legacyAgentOutputsIncluded)}`)
         .join("\n\n---\n\n")
         .slice(0, 30000);
-      const agentDigest = outputs
+      const agentDigest = outputsForReport
         .map((output, index) => `${index + 1}. ${output.agentName || output.agentId || "Agent"}\n${outputText(output).slice(0, 3000)}`)
         .join("\n\n")
         .slice(0, 30000);
@@ -407,11 +438,11 @@ export const reportRouter = router({
         messages: [
           {
             role: "system",
-            content: `You are DueProcess AI's report editor. Produce practical, court-safe reports. Use restrained legal language, cite source document names, avoid overclaiming, and separate strong findings from issues needing more proof. Use QC-cleared structured findings as the primary source of claims. ${templateInstruction(input.template)}`,
+            content: `You are DueProcess AI's report editor. Produce practical, court-safe reports. Use restrained legal language, cite source document names, avoid overclaiming, and separate strong findings from issues needing more proof. Use QC-cleared structured findings as the claim source. Do not create new factual accusations from raw source text or legacy/freeform agent outputs. ${templateInstruction(input.template)}`,
           },
           {
             role: "user",
-            content: `Create the report.\n\nScope: ${input.scope}\nDate focus: ${input.fromDate || "case start"} to ${input.toDate || "case end"}\nMinimum confidence: ${input.minConfidence}\nBlocked findings included: ${ctx.user.role === "admin" && input.includeBlockedFindings ? "yes" : "no"}\n\nSOURCE DOCUMENTS:\n${evidenceDigest}\n\nQC-CLEARED STRUCTURED FINDINGS:\n${findingDigest || "No QC-cleared structured findings available."}\n\nSAVED AGENT OUTPUTS:\n${agentDigest || "No saved agent outputs available."}`,
+            content: `Create the report.\n\nScope: ${input.scope}\nDate focus: ${input.fromDate || "case start"} to ${input.toDate || "case end"}\nMinimum confidence: ${input.minConfidence}\nBlocked findings included: ${blockedFindingsIncluded ? "yes - admin override" : "no"}\nLegacy/freeform agent outputs included: ${legacyAgentOutputsIncluded ? "yes - admin unsafe reference override" : "no - excluded by default"}\n\nSOURCE DOCUMENTS:\n${evidenceDigest}\n\nQC-CLEARED STRUCTURED FINDINGS:\n${findingDigest || "No QC-cleared structured findings available. State that no report-ready findings are available instead of inventing claims."}\n\nLEGACY/FREEFORM AGENT OUTPUTS:\n${agentDigest || "Excluded from generation context. Do not rely on saved freeform outputs for factual claims."}`,
           },
         ],
       });
@@ -439,7 +470,9 @@ export const reportRouter = router({
         scope: input.scope,
         template: input.template,
         documents: selectedDocuments,
-        outputs,
+        outputs: outputsForReport,
+        legacyAgentOutputsIncluded,
+        legacyAgentOutputsAvailable: outputs.length,
         findings,
         executiveSummary,
       });
@@ -463,15 +496,20 @@ export const reportRouter = router({
           mimeType: document.mimeType,
           fileSize: document.fileSize,
           status: document.status,
+          analysisReady: isDocumentReadyForAnalysis(document),
+          documentHash: document.documentHash,
+          extractionQualityScore: document.extractionQualityScore,
           uploadedAt: formatDate(document.createdAt),
           fileUrl: input.includeSources ? document.fileUrl : undefined,
         })),
         statistics: {
           documents: selectedDocuments.length,
           savedAgentOutputs: outputs.length,
-          readyDocuments: selectedDocuments.filter((document) => document.status === "completed").length,
+          readyDocuments: selectedDocuments.filter(isDocumentReadyForAnalysis).length,
           structuredFindings: findings.length,
-          blockedFindingsIncluded: ctx.user.role === "admin" && input.includeBlockedFindings,
+          blockedFindingsIncluded,
+          legacyAgentOutputsIncluded,
+          legacyAgentOutputsAvailable: outputs.length,
         },
         findings: findings.map((finding) => ({
           id: finding.id,
@@ -504,7 +542,7 @@ export const reportRouter = router({
         documentIds: JSON.stringify(selectedDocuments.map((document) => document.id)),
         selectedFindingIds: JSON.stringify(input.selectedFindingIds ?? []),
         minConfidence: input.minConfidence,
-        includeBlockedFindings: ctx.user.role === "admin" && input.includeBlockedFindings ? 1 : 0,
+        includeBlockedFindings: blockedFindingsIncluded ? 1 : 0,
         content,
         metadata: JSON.stringify({
           metadata: reportData.metadata,
@@ -597,10 +635,13 @@ export const reportRouter = router({
       id: doc.id,
       name: doc.fileName,
       status: doc.status,
+      documentHash: doc.documentHash,
+      extractionQualityScore: doc.extractionQualityScore,
       mimeType: doc.mimeType,
       fileSize: doc.fileSize,
       createdAt: doc.createdAt,
       hasText: Boolean(doc.extractedText && doc.extractedText.trim().length > 0),
+      analysisReady: isDocumentReadyForAnalysis(doc),
       savedAgentOutputs: outputCounts[doc.id] ?? 0,
       structuredFindings: findingCounts[doc.id] ?? 0,
       availableFormats: ["markdown", "html", "json"],
@@ -638,8 +679,11 @@ export const reportRouter = router({
           fileName: document.fileName,
           mimeType: document.mimeType,
           status: document.status,
+          documentHash: document.documentHash,
+          extractionQualityScore: document.extractionQualityScore,
           createdAt: document.createdAt,
           hasText: Boolean(document.extractedText && document.extractedText.trim().length > 0),
+          analysisReady: isDocumentReadyForAnalysis(document),
         })),
         outputs: outputs.map((output) => ({
           id: output.id,
@@ -660,9 +704,10 @@ export const reportRouter = router({
         })),
         statistics: {
           documents: selectedDocuments.length,
-          readyDocuments: selectedDocuments.filter((document) => document.status === "completed").length,
+          readyDocuments: selectedDocuments.filter(isDocumentReadyForAnalysis).length,
           savedAgentOutputs: outputs.length,
           structuredFindings: findings.length,
+          legacyAgentOutputsIncludedByDefault: false,
         },
       };
     }),

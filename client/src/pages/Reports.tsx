@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,9 @@ type ReportDocument = {
   fileSize: number | null;
   createdAt: Date;
   hasText: boolean;
+  analysisReady: boolean;
+  documentHash: string | null;
+  extractionQualityScore: number;
   savedAgentOutputs: number;
   structuredFindings: number;
 };
@@ -83,6 +87,8 @@ type SavedReport = {
     readyDocuments: number;
     structuredFindings: number;
     blockedFindingsIncluded: boolean;
+    legacyAgentOutputsIncluded: boolean;
+    legacyAgentOutputsAvailable?: number;
   };
   availableExportFormats: ExportFormat[];
   createdAt: Date | string;
@@ -214,15 +220,18 @@ export default function Reports() {
   const [toDate, setToDate] = useState("");
   const [minConfidence, setMinConfidence] = useState(0);
   const [includeBlockedFindings, setIncludeBlockedFindings] = useState(false);
+  const [includeLegacyAgentOutputs, setIncludeLegacyAgentOutputs] = useState(false);
   const [selectedFindingIds, setSelectedFindingIds] = useState<number[]>([]);
   const [reportData, setReportData] = useState<ReportData | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const trpcUtils = trpc.useUtils();
   const documentsQuery = trpc.reports.list.useQuery();
   const savedReportsQuery = trpc.reports.saved.useQuery();
   const documents: ReportDocument[] = documentsQuery.data ?? [];
   const savedReports: SavedReport[] = savedReportsQuery.data ?? [];
-  const readyDocuments = documents.filter((document) => document.status === "completed" && document.hasText);
+  const readyDocuments = documents.filter((document) => document.analysisReady);
   const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.id));
 
   const previewQuery = trpc.reports.preview.useQuery(
@@ -305,7 +314,8 @@ export default function Reports() {
       format,
       includeSources: true,
       minConfidence,
-      includeBlockedFindings,
+      includeBlockedFindings: isAdmin && includeBlockedFindings,
+      includeLegacyAgentOutputs: isAdmin && includeLegacyAgentOutputs,
       selectedFindingIds: selectedFindingIds.length > 0 ? selectedFindingIds : undefined,
       branding: {
         title: reportTitle || undefined,
@@ -458,7 +468,7 @@ export default function Reports() {
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium text-white">{document.name}</span>
                             <span className="mt-1 block text-xs text-[#8B949E]">
-                              {document.status} · {document.savedAgentOutputs} saved output{document.savedAgentOutputs === 1 ? "" : "s"}
+                              {document.analysisReady ? "analysis-ready" : "needs extraction review"} · OCR {document.extractionQualityScore ?? 0} · {document.savedAgentOutputs} legacy output{document.savedAgentOutputs === 1 ? "" : "s"}
                             </span>
                           </span>
                         </label>
@@ -560,13 +570,28 @@ export default function Reports() {
                   <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#30363D] bg-[#161B22] p-3">
                     <Checkbox
                       checked={includeBlockedFindings}
+                      disabled={!isAdmin}
                       onCheckedChange={(checked) => setIncludeBlockedFindings(Boolean(checked))}
                       className="mt-1"
                     />
                     <span>
                       <span className="block text-sm font-medium text-white">Admin override: include blocked findings</span>
                       <span className="mt-1 block text-xs leading-5 text-[#8B949E]">
-                        Blocked/needs-more-proof findings stay out by default.
+                        Blocked/needs-more-proof findings stay out by default. {!isAdmin ? "Admin access required." : ""}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#30363D] bg-[#161B22] p-3 sm:col-span-2">
+                    <Checkbox
+                      checked={includeLegacyAgentOutputs}
+                      disabled={!isAdmin}
+                      onCheckedChange={(checked) => setIncludeLegacyAgentOutputs(Boolean(checked))}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">Admin unsafe reference: include legacy/freeform outputs</span>
+                      <span className="mt-1 block text-xs leading-5 text-[#8B949E]">
+                        Off by default. Court-safe reports use QC-cleared structured findings, not older freeform agent text. {!isAdmin ? "Admin access required." : ""}
                       </span>
                     </span>
                   </label>
@@ -629,10 +654,20 @@ export default function Reports() {
                                   Admin override
                                 </Badge>
                               )}
+                              {report.statistics.legacyAgentOutputsIncluded ? (
+                                <Badge variant="outline" className="border-[#F85149] bg-[#F85149]/10 text-[#FF7B72]">
+                                  Legacy outputs included
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-[#3FB950]/40 bg-[#3FB950]/10 text-[#3FB950]">
+                                  Finding-first
+                                </Badge>
+                              )}
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#8B949E]">
                               <span>{report.statistics.documents} doc{report.statistics.documents === 1 ? "" : "s"}</span>
                               <span>{report.statistics.structuredFindings} finding{report.statistics.structuredFindings === 1 ? "" : "s"}</span>
+                              <span>{report.statistics.savedAgentOutputs} legacy output{report.statistics.savedAgentOutputs === 1 ? "" : "s"} available</span>
                               <span>Min confidence {report.minConfidence}</span>
                               <span className="inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
@@ -723,6 +758,7 @@ export default function Reports() {
                       <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
                         <p className="text-xs text-[#8B949E]">Outputs</p>
                         <p className="mt-1 text-xl font-semibold text-[#58A6FF]">{previewQuery.data.statistics.savedAgentOutputs}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wide text-[#8B949E]">excluded by default</p>
                       </div>
                       <div className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
                         <p className="text-xs text-[#8B949E]">Findings</p>
@@ -735,9 +771,11 @@ export default function Reports() {
                         <div key={document.id} className="flex items-center justify-between gap-3 rounded-md border border-[#30363D] bg-[#0D1117] p-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">{document.fileName}</p>
-                            <p className="text-xs text-[#8B949E]">{document.status}</p>
+                            <p className="text-xs text-[#8B949E]">
+                              {document.analysisReady ? "analysis-ready" : "needs extraction review"} · OCR {document.extractionQualityScore ?? 0}
+                            </p>
                           </div>
-                          {document.hasText ? <CheckCircle2 className="h-4 w-4 text-[#3FB950]" /> : <FileCheck className="h-4 w-4 text-[#D29922]" />}
+                          {document.analysisReady ? <CheckCircle2 className="h-4 w-4 text-[#3FB950]" /> : <FileCheck className="h-4 w-4 text-[#D29922]" />}
                         </div>
                       ))}
                       {previewQuery.data.documents.length > 5 && (
