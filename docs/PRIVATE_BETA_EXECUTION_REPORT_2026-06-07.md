@@ -114,6 +114,8 @@ Implemented:
 - Reports page now includes a Saved Reports library with Load, Download, and Delete actions.
 - Time-scoped reports now actually filter documents by selected upload date range.
 - Default report eligibility now requires QC-eligible status and `includedInReports` unless admin override is explicit.
+- Saved reports can now export as Markdown, HTML, JSON, PDF, or DOCX.
+- PDF and DOCX exports are generated server-side from canonical report Markdown.
 
 Smoke proof:
 
@@ -125,6 +127,11 @@ Smoke proof:
 - Saved report loaded and exported with matching content length: `277,874`.
 - Persisted `report_generation` usage event: `9,971` total tokens, estimated cost `5` cents.
 - Browser pass confirmed Saved Reports rendered, the smoke report was visible, Load/Download controls existed, and no console errors were captured.
+- Protected export smoke for saved report `#1`:
+  - Markdown: `utf8`, `277,874` chars
+  - PDF: `base64`, `227,956` bytes, `%PDF` signature
+  - DOCX: `base64`, `83,750` bytes, `PK` zip signature
+- Browser pass confirmed Original/PDF/DOCX controls render with no console errors.
 
 ## Billing Gate
 
@@ -165,11 +172,12 @@ Passing:
 
 - `pnpm build`
 - `pnpm exec vitest run server/leverageEngine.test.ts --pool=forks --poolOptions.forks.singleFork=true`
+- `pnpm exec vitest run server/leverageEngine.test.ts server/reportExport.test.ts --pool=forks --poolOptions.forks.singleFork=true`
 
 Focused Vitest results:
 
-- Test files: `1 passed`
-- Tests: `7 passed`
+- Test files: `2 passed`
+- Tests: `11 passed`
 
 Known issue:
 
@@ -181,7 +189,7 @@ Known issue:
 2. Add page-level anchors/OCR quality score if scanned OCR quality is inconsistent.
 3. Create Stripe products/prices and wire missing price IDs.
 4. Decide whether Firm checkout should create only the base subscription or wait for metered usage items.
-5. Add PDF/DOCX export.
-6. Add cross-user isolation integration tests.
-7. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
-8. Add saved-report retention/cleanup policy before public launch.
+5. Add cross-user isolation integration tests.
+6. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
+7. Add saved-report retention/cleanup policy before public launch.
+8. Improve exported PDF/DOCX styling after court-packet content stabilizes.

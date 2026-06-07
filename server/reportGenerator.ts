@@ -7,6 +7,11 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { isReportEligible, usageFromResponse } from "./leverageEngine";
 import {
+  buildReportExportArtifact,
+  markdownToReportHtml,
+  reportExportFormatSchema,
+} from "./reportExport";
+import {
   createGeneratedReport,
   createLlmUsageEvent,
   deleteGeneratedReportById,
@@ -52,7 +57,7 @@ function reportContent(input: {
   title: string;
   reportData: unknown;
 }): string {
-  if (input.format === "html") return markdownToHtml(input.markdown, input.title);
+  if (input.format === "html") return markdownToReportHtml(input.markdown, input.title);
   if (input.format === "json") return JSON.stringify(input.reportData, null, 2);
   return input.markdown;
 }
@@ -154,6 +159,7 @@ function savedReportSummary(report: NonNullable<GeneratedReportRecord>) {
       structuredFindings: Number(statistics.structuredFindings ?? 0),
       blockedFindingsIncluded: Boolean(statistics.blockedFindingsIncluded),
     },
+    availableExportFormats: ["markdown", "html", "json", "pdf", "docx"] as const,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -239,31 +245,6 @@ function buildPlainReport(data: {
     "## QC-Cleared Structured Findings",
     data.findings.map(findingText).join("\n\n") || "No QC-cleared structured findings were available for the selected scope.",
   ].join("\n");
-}
-
-function markdownToHtml(markdown: string, title: string): string {
-  const escape = (value: string) =>
-    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  const body = escape(markdown)
-    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
-    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
-    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
-    .replace(/\n/g, "<br />");
-
-  return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${escape(title)}</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 920px; margin: 40px auto; line-height: 1.55; color: #111827; }
-    h1, h2, h3 { color: #0f172a; }
-    h1 { border-bottom: 2px solid #2563eb; padding-bottom: 12px; }
-  </style>
-</head>
-<body>${body}</body>
-</html>`;
 }
 
 async function getScopedDocuments(input: {
@@ -530,6 +511,7 @@ export const reportRouter = router({
           documents: reportData.documents,
           statistics: reportData.statistics,
           findings: reportData.findings,
+          markdown,
           executiveSummaryExcerpt: executiveSummary.slice(0, 4000),
         }),
       });
@@ -562,15 +544,16 @@ export const reportRouter = router({
     }),
 
   exportSaved: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), format: reportExportFormatSchema.optional() }))
     .query(async ({ input, ctx }) => {
       const report = await getOwnedGeneratedReport(input.id, ctx.user.id);
+      const storedFormat = reportExportFormatSchema.safeParse(report.format);
+      const exportFormat = input.format ?? (storedFormat.success ? storedFormat.data : "markdown");
+      const artifact = await buildReportExportArtifact(report, exportFormat);
       return {
         id: report.id,
         title: report.title,
-        format: report.format,
-        fileName: report.fileName,
-        content: report.content,
+        ...artifact,
       };
     }),
 

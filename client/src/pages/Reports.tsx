@@ -33,6 +33,7 @@ type ReportTemplate =
   | "discovery_demands"
   | "executive_summary";
 type ReportFormat = "markdown" | "html" | "json";
+type ExportFormat = ReportFormat | "pdf" | "docx";
 
 type ReportDocument = {
   id: number;
@@ -83,6 +84,7 @@ type SavedReport = {
     structuredFindings: number;
     blockedFindingsIncluded: boolean;
   };
+  availableExportFormats: ExportFormat[];
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -141,9 +143,32 @@ const templates: Array<{ id: ReportTemplate; label: string; description: string 
   },
 ];
 
-function safeFileDownload(fileName: string, content: string, format: ReportFormat) {
-  const type = format === "html" ? "text/html;charset=utf-8" : format === "json" ? "application/json;charset=utf-8" : "text/markdown;charset=utf-8";
-  const blob = new Blob([content], { type });
+function mimeTypeForFormat(format: ExportFormat) {
+  if (format === "html") return "text/html;charset=utf-8";
+  if (format === "json") return "application/json;charset=utf-8";
+  if (format === "pdf") return "application/pdf";
+  if (format === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  return "text/markdown;charset=utf-8";
+}
+
+function base64ToBytes(content: string) {
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function safeFileDownload(
+  fileName: string,
+  content: string,
+  format: ExportFormat,
+  options?: { encoding?: "utf8" | "base64"; mimeType?: string }
+) {
+  const type = options?.mimeType ?? mimeTypeForFormat(format);
+  const payload = options?.encoding === "base64" ? base64ToBytes(content) : content;
+  const blob = new Blob([payload], { type });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -154,6 +179,10 @@ function safeFileDownload(fileName: string, content: string, format: ReportForma
 
 function normalizeReportFormat(format: string): ReportFormat {
   return format === "html" || format === "json" || format === "markdown" ? format : "markdown";
+}
+
+function normalizeExportFormat(format: string): ExportFormat {
+  return format === "html" || format === "json" || format === "markdown" || format === "pdf" || format === "docx" ? format : "markdown";
 }
 
 function formatDateTime(value: Date | string) {
@@ -301,10 +330,13 @@ export default function Reports() {
     }
   };
 
-  const handleDownloadSavedReport = async (id: number) => {
+  const handleDownloadSavedReport = async (id: number, exportFormat?: ExportFormat) => {
     try {
-      const saved = await trpcUtils.reports.exportSaved.fetch({ id });
-      safeFileDownload(saved.fileName, saved.content, normalizeReportFormat(saved.format));
+      const saved = await trpcUtils.reports.exportSaved.fetch({ id, format: exportFormat });
+      safeFileDownload(saved.fileName, saved.content, normalizeExportFormat(saved.format), {
+        encoding: saved.encoding,
+        mimeType: saved.mimeType,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not download saved report.");
     }
@@ -627,7 +659,25 @@ export default function Reports() {
                               className="border-[#30363D] bg-[#161B22]"
                             >
                               <Download className="mr-1 h-3.5 w-3.5" />
-                              Download
+                              Original
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleDownloadSavedReport(report.id, "pdf")}
+                              className="border-[#30363D] bg-[#161B22]"
+                            >
+                              PDF
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleDownloadSavedReport(report.id, "docx")}
+                              className="border-[#30363D] bg-[#161B22]"
+                            >
+                              DOCX
                             </Button>
                             <Button
                               type="button"
@@ -793,6 +843,28 @@ export default function Reports() {
                         <Download className="mr-1 h-3.5 w-3.5" />
                         Download
                       </Button>
+                      {reportData.id && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleDownloadSavedReport(reportData.id!, "pdf")}
+                            className="border-[#30363D] bg-[#0D1117]"
+                          >
+                            PDF
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleDownloadSavedReport(reportData.id!, "docx")}
+                            className="border-[#30363D] bg-[#0D1117]"
+                          >
+                            DOCX
+                          </Button>
+                        </>
+                      )}
                     </div>
 
                     <TabsContent value="report">
