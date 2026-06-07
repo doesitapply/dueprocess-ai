@@ -6,7 +6,13 @@ import { agentFindings, agentOutputs, documents } from "../drizzle/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { isReportEligible, usageFromResponse } from "./leverageEngine";
-import { createLlmUsageEvent } from "./db";
+import {
+  createGeneratedReport,
+  createLlmUsageEvent,
+  deleteGeneratedReportById,
+  getGeneratedReportById,
+  getGeneratedReportsByUserId,
+} from "./db";
 import { enforceReportGenerationAccess } from "./accessControl";
 
 const reportScopeSchema = z.enum(["case", "files", "time"]);
@@ -27,6 +33,34 @@ type ReportFormat = z.infer<typeof reportFormatSchema>;
 type DocumentRecord = typeof documents.$inferSelect;
 type AgentOutputRecord = typeof agentOutputs.$inferSelect;
 type AgentFindingRecord = typeof agentFindings.$inferSelect;
+type GeneratedReportRecord = Awaited<ReturnType<typeof getGeneratedReportById>>;
+
+function truncateForColumn(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function reportFileExtension(format: ReportFormat): string {
+  if (format === "json") return "json";
+  if (format === "html") return "html";
+  return "md";
+}
+
+function reportContent(input: {
+  format: ReportFormat;
+  markdown: string;
+  title: string;
+  reportData: unknown;
+}): string {
+  if (input.format === "html") return markdownToHtml(input.markdown, input.title);
+  if (input.format === "json") return JSON.stringify(input.reportData, null, 2);
+  return input.markdown;
+}
+
+function buildReportFileName(title: string, format: ReportFormat): string {
+  const safeBase = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "dueprocess-report";
+  return truncateForColumn(`${safeBase}.${reportFileExtension(format)}`, 255);
+}
 
 function formatDate(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
@@ -81,6 +115,48 @@ function safeJsonArray(value: string | null): unknown[] {
   } catch {
     return [];
   }
+}
+
+function safeJsonObject(value: string | null): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeNumberArray(value: string | null): number[] {
+  return safeJsonArray(value)
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function savedReportSummary(report: NonNullable<GeneratedReportRecord>) {
+  const metadata = safeJsonObject(report.metadata);
+  const statistics = safeJsonObject(JSON.stringify(metadata.statistics ?? {}));
+  return {
+    id: report.id,
+    title: report.title,
+    template: report.template,
+    scope: report.scope,
+    format: report.format,
+    fileName: report.fileName,
+    documentIds: safeNumberArray(report.documentIds),
+    selectedFindingIds: safeNumberArray(report.selectedFindingIds),
+    minConfidence: report.minConfidence,
+    includeBlockedFindings: Boolean(report.includeBlockedFindings),
+    statistics: {
+      documents: Number(statistics.documents ?? 0),
+      savedAgentOutputs: Number(statistics.savedAgentOutputs ?? 0),
+      readyDocuments: Number(statistics.readyDocuments ?? 0),
+      structuredFindings: Number(statistics.structuredFindings ?? 0),
+      blockedFindingsIncluded: Boolean(statistics.blockedFindingsIncluded),
+    },
+    createdAt: report.createdAt,
+    updatedAt: report.updatedAt,
+  };
 }
 
 function findingMatchesDocuments(finding: AgentFindingRecord, documentIds: Set<number>) {
@@ -220,7 +296,13 @@ async function getScopedDocuments(input: {
     if (!fromDate && !toDate) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a start date, end date, or both." });
     }
-    return allDocuments;
+    return allDocuments.filter((document) => {
+      const createdAt = document.createdAt instanceof Date ? document.createdAt : new Date(document.createdAt);
+      if (Number.isNaN(createdAt.getTime())) return false;
+      if (fromDate && createdAt < fromDate) return false;
+      if (toDate && createdAt > toDate) return false;
+      return true;
+    });
   }
 
   return allDocuments;
@@ -258,10 +340,19 @@ async function getFindingsForScope(input: {
   return allFindings.filter((finding) => {
     if (selectedFindingIdSet.size > 0 && !selectedFindingIdSet.has(finding.id)) return false;
     if (!findingMatchesDocuments(finding, documentIdSet)) return false;
+    if (!input.includeBlockedFindings && !finding.includedInReports) return false;
     if (!input.includeBlockedFindings && !isReportEligible(finding.qcStatus)) return false;
     if (finding.confidence < (input.minConfidence ?? 0)) return false;
     return true;
   });
+}
+
+async function getOwnedGeneratedReport(id: number, userId: number) {
+  const report = await getGeneratedReportById(id);
+  if (!report || report.userId !== userId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Saved report not found." });
+  }
+  return report;
 }
 
 export const reportRouter = router({
@@ -327,7 +418,8 @@ export const reportRouter = router({
         .join("\n\n")
         .slice(0, 30000);
 
-      const title = input.branding?.title || `${templateInstruction(input.template).split(".")[0]}: ${selectedDocuments.length} Source${selectedDocuments.length === 1 ? "" : "s"}`;
+      const rawTitle = input.branding?.title || `${templateInstruction(input.template).split(".")[0]}: ${selectedDocuments.length} Source${selectedDocuments.length === 1 ? "" : "s"}`;
+      const title = truncateForColumn(rawTitle.trim() || "DueProcess Report", 255);
       const generatedAt = new Date().toISOString();
 
       const summaryResponse = await invokeLLM({
@@ -414,12 +506,80 @@ export const reportRouter = router({
         markdown,
       };
 
+      const content = reportContent({
+        format: input.format,
+        markdown,
+        title,
+        reportData,
+      });
+      const fileName = buildReportFileName(title, input.format);
+      const savedReport = await createGeneratedReport({
+        userId: ctx.user.id,
+        title,
+        template: input.template,
+        scope: input.scope,
+        format: input.format,
+        fileName,
+        documentIds: JSON.stringify(selectedDocuments.map((document) => document.id)),
+        selectedFindingIds: JSON.stringify(input.selectedFindingIds ?? []),
+        minConfidence: input.minConfidence,
+        includeBlockedFindings: ctx.user.role === "admin" && input.includeBlockedFindings ? 1 : 0,
+        content,
+        metadata: JSON.stringify({
+          metadata: reportData.metadata,
+          documents: reportData.documents,
+          statistics: reportData.statistics,
+          findings: reportData.findings,
+          executiveSummaryExcerpt: executiveSummary.slice(0, 4000),
+        }),
+      });
+
       return {
+        id: savedReport.id,
+        reportId: savedReport.id,
         format: input.format,
         data: reportData,
-        content: input.format === "html" ? markdownToHtml(markdown, title) : input.format === "json" ? JSON.stringify(reportData, null, 2) : markdown,
-        fileName: `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "dueprocess-report"}.${input.format === "json" ? "json" : input.format === "html" ? "html" : "md"}`,
+        content,
+        fileName,
+        createdAt: savedReport.createdAt,
       };
+    }),
+
+  saved: protectedProcedure.query(async ({ ctx }) => {
+    const reports = await getGeneratedReportsByUserId(ctx.user.id);
+    return reports.map(savedReportSummary);
+  }),
+
+  getSaved: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const report = await getOwnedGeneratedReport(input.id, ctx.user.id);
+      return {
+        ...savedReportSummary(report),
+        content: report.content,
+        metadata: safeJsonObject(report.metadata),
+      };
+    }),
+
+  exportSaved: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const report = await getOwnedGeneratedReport(input.id, ctx.user.id);
+      return {
+        id: report.id,
+        title: report.title,
+        format: report.format,
+        fileName: report.fileName,
+        content: report.content,
+      };
+    }),
+
+  deleteSaved: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await getOwnedGeneratedReport(input.id, ctx.user.id);
+      await deleteGeneratedReportById(input.id, ctx.user.id);
+      return { success: true };
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {

@@ -11,13 +11,16 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  Clock,
   Copy,
   Download,
+  Eye,
   FileCheck,
   FileText,
   FolderSearch,
   Loader2,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -51,6 +54,37 @@ type PreviewFinding = {
   confidence: number;
   leverageScore: number;
   qcStatus: string;
+};
+
+type ReportData = {
+  id?: number;
+  content: string;
+  fileName: string;
+  format: ReportFormat;
+  title?: string;
+  createdAt?: Date | string;
+};
+
+type SavedReport = {
+  id: number;
+  title: string;
+  template: string;
+  scope: string;
+  format: string;
+  fileName: string;
+  documentIds: number[];
+  selectedFindingIds: number[];
+  minConfidence: number;
+  includeBlockedFindings: boolean;
+  statistics: {
+    documents: number;
+    savedAgentOutputs: number;
+    readyDocuments: number;
+    structuredFindings: number;
+    blockedFindingsIncluded: boolean;
+  };
+  createdAt: Date | string;
+  updatedAt: Date | string;
 };
 
 const scopeOptions: Array<{ id: ReportScope; label: string; description: string; icon: typeof FolderSearch }> = [
@@ -118,6 +152,20 @@ function safeFileDownload(fileName: string, content: string, format: ReportForma
   URL.revokeObjectURL(url);
 }
 
+function normalizeReportFormat(format: string): ReportFormat {
+  return format === "html" || format === "json" || format === "markdown" ? format : "markdown";
+}
+
+function formatDateTime(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+}
+
+function formatTemplateLabel(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 async function copyText(content: string) {
   try {
     await navigator.clipboard.writeText(content);
@@ -138,10 +186,13 @@ export default function Reports() {
   const [minConfidence, setMinConfidence] = useState(0);
   const [includeBlockedFindings, setIncludeBlockedFindings] = useState(false);
   const [selectedFindingIds, setSelectedFindingIds] = useState<number[]>([]);
-  const [reportData, setReportData] = useState<{ content: string; fileName: string; format: ReportFormat } | null>(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
 
+  const trpcUtils = trpc.useUtils();
   const documentsQuery = trpc.reports.list.useQuery();
+  const savedReportsQuery = trpc.reports.saved.useQuery();
   const documents: ReportDocument[] = documentsQuery.data ?? [];
+  const savedReports: SavedReport[] = savedReportsQuery.data ?? [];
   const readyDocuments = documents.filter((document) => document.status === "completed" && document.hasText);
   const selectedDocuments = documents.filter((document) => selectedDocumentIds.includes(document.id));
 
@@ -161,11 +212,24 @@ export default function Reports() {
   const generateReport = trpc.reports.generate.useMutation({
     onSuccess: (data) => {
       setReportData({
+        id: data.reportId,
         content: data.content,
         fileName: data.fileName,
         format: data.format,
+        createdAt: data.createdAt,
       });
-      toast.success("Report generated");
+      void savedReportsQuery.refetch();
+      toast.success("Report generated and saved");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteSavedReport = trpc.reports.deleteSaved.useMutation({
+    onSuccess: () => {
+      void savedReportsQuery.refetch();
+      toast.success("Saved report deleted");
     },
     onError: (error) => {
       toast.error(error.message);
@@ -218,6 +282,32 @@ export default function Reports() {
         title: reportTitle || undefined,
       },
     });
+  };
+
+  const handleLoadSavedReport = async (id: number) => {
+    try {
+      const saved = await trpcUtils.reports.getSaved.fetch({ id });
+      setReportData({
+        id: saved.id,
+        title: saved.title,
+        content: saved.content,
+        fileName: saved.fileName,
+        format: normalizeReportFormat(saved.format),
+        createdAt: saved.createdAt,
+      });
+      toast.success("Saved report loaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load saved report.");
+    }
+  };
+
+  const handleDownloadSavedReport = async (id: number) => {
+    try {
+      const saved = await trpcUtils.reports.exportSaved.fetch({ id });
+      safeFileDownload(saved.fileName, saved.content, normalizeReportFormat(saved.format));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not download saved report.");
+    }
   };
 
   return (
@@ -472,6 +562,94 @@ export default function Reports() {
 
             <Card className="border-[#30363D] bg-[#161B22]">
               <CardHeader>
+                <CardTitle>Saved Reports</CardTitle>
+                <CardDescription className="text-[#8B949E]">Durable report artifacts tied to the selected source files and QC settings.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {savedReportsQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-[#8B949E]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading saved reports
+                  </div>
+                ) : savedReports.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-[#30363D] p-6 text-center text-sm text-[#8B949E]">
+                    No saved reports yet. Generate one to preserve the output and source selection.
+                  </div>
+                ) : (
+                  <div className="max-h-80 space-y-3 overflow-auto pr-1">
+                    {savedReports.slice(0, 12).map((report) => (
+                      <div key={report.id} className="rounded-md border border-[#30363D] bg-[#0D1117] p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-white">{report.title}</p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#8B949E]">
+                              <Badge variant="outline" className="border-[#30363D] bg-[#161B22] text-[#8B949E]">
+                                {formatTemplateLabel(report.template)}
+                              </Badge>
+                              <Badge variant="outline" className="border-[#30363D] bg-[#161B22] text-[#8B949E]">
+                                {report.scope}
+                              </Badge>
+                              <Badge variant="outline" className="border-[#30363D] bg-[#161B22] text-[#8B949E]">
+                                {report.format.toUpperCase()}
+                              </Badge>
+                              {report.includeBlockedFindings && (
+                                <Badge variant="outline" className="border-[#F85149] bg-[#F85149]/10 text-[#FF7B72]">
+                                  Admin override
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#8B949E]">
+                              <span>{report.statistics.documents} doc{report.statistics.documents === 1 ? "" : "s"}</span>
+                              <span>{report.statistics.structuredFindings} finding{report.statistics.structuredFindings === 1 ? "" : "s"}</span>
+                              <span>Min confidence {report.minConfidence}</span>
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDateTime(report.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleLoadSavedReport(report.id)}
+                              className="border-[#30363D] bg-[#161B22]"
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" />
+                              Load
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleDownloadSavedReport(report.id)}
+                              className="border-[#30363D] bg-[#161B22]"
+                            >
+                              <Download className="mr-1 h-3.5 w-3.5" />
+                              Download
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={deleteSavedReport.isPending}
+                              onClick={() => deleteSavedReport.mutate({ id: report.id })}
+                              className="border-[#F85149]/40 bg-[#161B22] text-[#FF7B72] hover:bg-[#F85149]/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#30363D] bg-[#161B22]">
+              <CardHeader>
                 <CardTitle>Scope Preview</CardTitle>
                 <CardDescription className="text-[#8B949E]">What will be included before the report runs.</CardDescription>
               </CardHeader>
@@ -586,6 +764,16 @@ export default function Reports() {
                         <TabsTrigger value="report">Report</TabsTrigger>
                         <TabsTrigger value="sources">Selected Files</TabsTrigger>
                       </TabsList>
+                      {reportData.id && (
+                        <Badge variant="outline" className="border-[#30363D] bg-[#0D1117] text-[#8B949E]">
+                          Saved #{reportData.id}
+                        </Badge>
+                      )}
+                      {reportData.createdAt && (
+                        <Badge variant="outline" className="border-[#30363D] bg-[#0D1117] text-[#8B949E]">
+                          {formatDateTime(reportData.createdAt)}
+                        </Badge>
+                      )}
                       <Button
                         type="button"
                         size="sm"

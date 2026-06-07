@@ -104,6 +104,28 @@ Settings usage:
 - Exact token telemetry is enabled.
 - `llm_usage_events` are visible in Settings usage data.
 
+## Durable Report Records
+
+Implemented:
+
+- Added `generated_reports` table with `longtext` content and metadata fields.
+- Report generation now persists title, template, scope, format, selected document IDs, selected finding IDs, confidence threshold, admin override flag, content, and metadata.
+- Added protected report endpoints for saved report list, load, export, and delete.
+- Reports page now includes a Saved Reports library with Load, Download, and Delete actions.
+- Time-scoped reports now actually filter documents by selected upload date range.
+- Default report eligibility now requires QC-eligible status and `includedInReports` unless admin override is explicit.
+
+Smoke proof:
+
+- Migration applied against the live configured database.
+- Core routes returned HTTP 200 on `localhost:3014`.
+- Protected API smoke used local auth and listed `106` documents.
+- Selected-file preview returned `1` document and `5` structured findings.
+- Generated saved report `#1` from one ready document.
+- Saved report loaded and exported with matching content length: `277,874`.
+- Persisted `report_generation` usage event: `9,971` total tokens, estimated cost `5` cents.
+- Browser pass confirmed Saved Reports rendered, the smoke report was visible, Load/Download controls existed, and no console errors were captured.
+
 ## Billing Gate
 
 Configured:
@@ -159,7 +181,7 @@ Known issue:
 2. Add page-level anchors/OCR quality score if scanned OCR quality is inconsistent.
 3. Create Stripe products/prices and wire missing price IDs.
 4. Decide whether Firm checkout should create only the base subscription or wait for metered usage items.
-5. Add persistent report records, not just generated response payloads.
-6. Add PDF/DOCX export.
-7. Add cross-user isolation integration tests.
-8. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
+5. Add PDF/DOCX export.
+6. Add cross-user isolation integration tests.
+7. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
+8. Add saved-report retention/cleanup policy before public launch.

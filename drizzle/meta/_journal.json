@@ -71,6 +71,13 @@
       "when": 1780580600000,
       "tag": "0009_leverage_engine_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1780832880000,
+      "tag": "0010_generated_reports",
+      "breakpoints": true
     }
   ]
 }

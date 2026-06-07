@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -211,6 +211,33 @@ export const llmUsageEvents = mysqlTable("llm_usage_events", {
 
 export type LlmUsageEvent = typeof llmUsageEvents.$inferSelect;
 export type InsertLlmUsageEvent = typeof llmUsageEvents.$inferInsert;
+
+/**
+ * Persisted report artifacts generated from QC-cleared findings.
+ */
+export const generatedReports = mysqlTable("generated_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  template: varchar("template", { length: 64 }).notNull(),
+  scope: varchar("scope", { length: 32 }).notNull(),
+  format: varchar("format", { length: 16 }).notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  documentIds: longtext("documentIds").notNull(),
+  selectedFindingIds: longtext("selectedFindingIds"),
+  minConfidence: int("minConfidence").default(0).notNull(),
+  includeBlockedFindings: int("includeBlockedFindings").default(0).notNull(),
+  content: longtext("content").notNull(),
+  metadata: longtext("metadata").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("generated_reports_user_idx").on(table.userId),
+  index("generated_reports_created_idx").on(table.createdAt),
+]);
+
+export type GeneratedReport = typeof generatedReports.$inferSelect;
+export type InsertGeneratedReport = typeof generatedReports.$inferInsert;
 
 /**
  * Agent divisions for specialized legal analysis

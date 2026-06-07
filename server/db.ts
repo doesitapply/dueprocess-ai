@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, 
@@ -32,7 +32,10 @@ import {
   AgentFindingAudit,
   llmUsageEvents,
   InsertLlmUsageEvent,
-  LlmUsageEvent
+  LlmUsageEvent,
+  generatedReports,
+  InsertGeneratedReport,
+  GeneratedReport
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -283,6 +286,39 @@ export async function getLlmUsageEventsByUserId(userId: number): Promise<LlmUsag
   if (!db) return [];
 
   return db.select().from(llmUsageEvents).where(eq(llmUsageEvents.userId, userId)).orderBy(desc(llmUsageEvents.createdAt));
+}
+
+// Generated report queries
+export async function createGeneratedReport(report: InsertGeneratedReport): Promise<GeneratedReport> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(generatedReports).values(report);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(generatedReports).where(eq(generatedReports.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getGeneratedReportsByUserId(userId: number): Promise<GeneratedReport[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(generatedReports).where(eq(generatedReports.userId, userId)).orderBy(desc(generatedReports.createdAt));
+}
+
+export async function getGeneratedReportById(id: number): Promise<GeneratedReport | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(generatedReports).where(eq(generatedReports.id, id)).limit(1);
+  return result[0];
+}
+
+export async function deleteGeneratedReportById(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(generatedReports).where(and(eq(generatedReports.id, id), eq(generatedReports.userId, userId)));
 }
 
 // Subscription queries
