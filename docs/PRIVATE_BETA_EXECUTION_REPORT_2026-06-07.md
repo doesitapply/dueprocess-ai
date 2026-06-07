@@ -166,6 +166,31 @@ Implemented server-side gates for:
 
 Owner/admin override remains active for the configured owner account.
 
+## Cross-User Isolation Proof
+
+Implemented:
+
+- Added a real-DB integration test for account isolation.
+- Added Vitest path aliases so full-router integration tests can import production router code.
+
+Integration coverage:
+
+- User A and User B get separate synthetic documents, saved agent outputs, structured findings, and generated reports.
+- `documents.list` only returns the current user's documents.
+- `agents.listSavedRuns` only returns saved outputs attached to the current user's documents.
+- `agents.listFindings` only returns the current user's structured findings.
+- `reports.saved` only returns the current user's saved reports.
+- Direct User B access to User A document/report/export/delete IDs is blocked.
+- Report preview with User B session and User A document ID returns zero documents, outputs, and findings.
+
+Live HTTP smoke:
+
+- Used real local-auth session cookies against `localhost:3014`.
+- Created two synthetic users and private document/report/output rows.
+- Confirmed User B could not list, read, export, or delete User A records.
+- Confirmed User A could export their own report as PDF.
+- Cleanup check after smoke: `0` synthetic users, `0` synthetic documents, `0` synthetic reports remained.
+
 ## Tests
 
 Passing:
@@ -173,11 +198,12 @@ Passing:
 - `pnpm build`
 - `pnpm exec vitest run server/leverageEngine.test.ts --pool=forks --poolOptions.forks.singleFork=true`
 - `pnpm exec vitest run server/leverageEngine.test.ts server/reportExport.test.ts --pool=forks --poolOptions.forks.singleFork=true`
+- `pnpm exec vitest run server/crossUserIsolation.integration.test.ts --pool=forks --poolOptions.forks.singleFork=true`
 
 Focused Vitest results:
 
-- Test files: `2 passed`
-- Tests: `11 passed`
+- Test files: `3 passed`
+- Tests: `14 passed`
 
 Known issue:
 
@@ -189,7 +215,7 @@ Known issue:
 2. Add page-level anchors/OCR quality score if scanned OCR quality is inconsistent.
 3. Create Stripe products/prices and wire missing price IDs.
 4. Decide whether Firm checkout should create only the base subscription or wait for metered usage items.
-5. Add cross-user isolation integration tests.
-6. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
-7. Add saved-report retention/cleanup policy before public launch.
-8. Improve exported PDF/DOCX styling after court-packet content stabilizes.
+5. Add a full browser smoke script for login, upload, analysis, report, settings, and billing.
+6. Add saved-report retention/cleanup policy before public launch.
+7. Improve exported PDF/DOCX styling after court-packet content stabilizes.
+8. Add database-level ownership/index hardening after route-level isolation stabilizes.
