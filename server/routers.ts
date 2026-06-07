@@ -542,7 +542,6 @@ export const appRouter = router({
             ? `Focus on case events, facts, filings, and contradictions in this period: ${input.fromDate || "case start"} through ${input.toDate || "case end"}. Review every included document for references to that period even if the file was uploaded later.`
             : "";
 
-        await updateDocumentStatus(anchorDocument.id, "processing");
         const run = await createAgentRun({
           userId,
           anchorDocumentId: anchorDocument.id,
@@ -726,11 +725,6 @@ export const appRouter = router({
         const synthesis = buildWarRoomSynthesis(allStructuredFindings);
         const returnedFindings = results.flatMap((result) => "findings" in result ? result.findings : []);
 
-        await updateDocumentStatus(
-          anchorDocument.id,
-          completedCount === sectorAgents.length ? "completed" : "failed",
-          `${completedCount}/${sectorAgents.length} ${input.sector} agents completed across ${selectedDocuments.length} document(s).`
-        );
         await updateAgentRun(run.id, {
           status: completedCount === sectorAgents.length ? "completed" : "failed",
           completedAgents: completedCount,
