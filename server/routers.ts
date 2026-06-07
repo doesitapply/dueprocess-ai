@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -31,10 +32,16 @@ import {
   verifyFindingQuotes,
   type StructuredFinding,
 } from "./leverageEngine";
+import {
+  analyzeExtractionDiagnostics,
+  documentReadinessReason,
+  isDocumentReadyForAnalysis,
+  withSourceAnchor,
+} from "./extractionReadiness";
 
-function assertDocumentReadyForAnalysis(document: { status: string; extractedText?: string | null; fileName: string }) {
-  if (document.status !== "completed" || !document.extractedText || document.extractedText.trim().length === 0) {
-    throw new Error(`${document.fileName} is not ready for agent analysis yet. Wait until evidence processing completes.`);
+function assertDocumentReadyForAnalysis(document: Parameters<typeof isDocumentReadyForAnalysis>[0]) {
+  if (!isDocumentReadyForAnalysis(document)) {
+    throw new Error(documentReadinessReason(document) || `${document.fileName || "Document"} is not ready for agent analysis yet.`);
   }
 }
 
@@ -473,6 +480,13 @@ export const appRouter = router({
           if (!fromDate && !toDate) {
             throw new Error("Choose a start date, end date, or both before running time-period analysis.");
           }
+          selectedDocuments = allDocuments.filter((document) => {
+            const createdAt = new Date(document.createdAt);
+            if (Number.isNaN(createdAt.getTime())) return false;
+            if (fromDate && createdAt < fromDate) return false;
+            if (toDate && createdAt > toDate) return false;
+            return true;
+          });
         }
 
         if (selectedDocuments.length === 0) {
@@ -982,8 +996,34 @@ Do not produce satire, marketing ideas, social content, product ideas, or generi
             clerkMotionDraft: result.motionScaffold,
           });
 
-          // Update document status to completed
-          await updateDocumentStatus(input.documentId, "completed", result.summary);
+          const documentHash = document.documentHash || createHash("sha256").update(input.documentText).digest("hex");
+          const anchoredText = document.extractedText?.trim() || withSourceAnchor(input.documentText, documentHash);
+          const diagnostics = analyzeExtractionDiagnostics(
+            {
+              text: anchoredText,
+              method: "manual_text_entry",
+              status: "completed",
+              note: "Text was manually pasted for this analysis.",
+            },
+            documentHash
+          );
+
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db
+            .update(documents)
+            .set({
+              status: "completed",
+              summary: result.summary,
+              documentHash: diagnostics.documentHash || documentHash,
+              extractionMethod: diagnostics.extractionMethod,
+              extractionNote: diagnostics.extractionNote,
+              extractionTextLength: diagnostics.textLength,
+              extractionQualityScore: diagnostics.qualityScore,
+              extractionWarnings: JSON.stringify(diagnostics.warnings),
+              extractedText: anchoredText,
+            })
+            .where(eq(documents.id, input.documentId));
 
           return {
             success: true,

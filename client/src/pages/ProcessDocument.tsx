@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, BookOpen, FileText, Gavel, Loader2, Play, Scale, Search } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, FileText, Gauge, Gavel, Hash, Loader2, Play, RefreshCw, Scale, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { toast } from "sonner";
@@ -33,6 +33,17 @@ type ForensicAnalysis = {
   motionScaffold: string;
 };
 
+type ExtractionDocument = {
+  status: string;
+  extractedText?: string | null;
+  documentHash?: string | null;
+  extractionMethod?: string | null;
+  extractionNote?: string | null;
+  extractionTextLength?: number | null;
+  extractionQualityScore?: number | null;
+  extractionWarnings?: string | null;
+};
+
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
   try {
@@ -41,6 +52,32 @@ function parseJsonArray(value: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function sourceAnchored(document: ExtractionDocument) {
+  return Boolean(document.documentHash || document.extractedText?.includes("SOURCE_SHA256:"));
+}
+
+function extractedLength(document: ExtractionDocument) {
+  if (typeof document.extractionTextLength === "number" && document.extractionTextLength > 0) return document.extractionTextLength;
+  return (document.extractedText || "").replace(/^SOURCE_SHA256:\s*[a-f0-9]{64}\s*/im, "").trim().length;
+}
+
+function extractionWarnings(document: ExtractionDocument) {
+  return parseJsonArray(document.extractionWarnings);
+}
+
+function qualityScore(document: ExtractionDocument) {
+  if (typeof document.extractionQualityScore === "number" && document.extractionQualityScore > 0) return document.extractionQualityScore;
+  if (document.status !== "completed") return 0;
+  let score = 100;
+  if (!sourceAnchored(document)) score -= 45;
+  if (extractedLength(document) === 0) score -= 80;
+  return Math.max(0, Math.min(100, score));
+}
+
+function isAnalysisReady(document: ExtractionDocument) {
+  return document.status === "completed" && sourceAnchored(document) && extractedLength(document) > 0 && qualityScore(document) >= 25;
 }
 
 function parseForensicAnalysis(output: string | null | undefined): ForensicAnalysis | null {
@@ -115,6 +152,18 @@ export default function ProcessDocument() {
     },
   });
 
+  const retryExtraction = trpc.upload.retryExtraction.useMutation({
+    onSuccess: result => {
+      if (result.success) {
+        toast.success(`OCR retry complete: ${result.textLength} characters extracted. Quality ${result.extractionQualityScore}/100.`);
+      } else {
+        toast.warning(`OCR retry still needs review: ${result.extractionNote || "No usable text extracted."}`);
+      }
+      refetch();
+    },
+    onError: error => toast.error(`OCR retry failed: ${error.message}`),
+  });
+
   const handleProcess = async () => {
     if (!documentText.trim()) {
       toast.error("Paste the document text to analyze");
@@ -126,6 +175,10 @@ export default function ProcessDocument() {
       documentId,
       documentText: documentText.trim(),
     });
+  };
+
+  const handleRetryExtraction = async () => {
+    await retryExtraction.mutateAsync({ id: documentId });
   };
 
   const analysis = useMemo(() => {
@@ -185,9 +238,11 @@ export default function ProcessDocument() {
   }
 
   const { document } = data;
-  const canProcess = document.status === "pending" || document.status === "failed";
+  const readyForAnalysis = isAnalysisReady(document);
+  const canProcess = document.status === "pending" || document.status === "failed" || !readyForAnalysis;
   const hasAnalysis = Boolean(analysis && document.status === "completed");
   const extractedText = document.extractedText || "";
+  const warnings = extractionWarnings(document);
   const searchHits = textSearch.trim()
     ? (extractedText.toLowerCase().match(new RegExp(textSearch.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").toLowerCase(), "g")) || []).length
     : 0;
@@ -217,10 +272,62 @@ export default function ProcessDocument() {
             <h1 className="text-2xl font-semibold">{document.fileName}</h1>
             {document.summary && <p className="mt-2 max-w-3xl text-sm text-[#8B949E]">{document.summary}</p>}
           </div>
-          <Badge variant="outline" className="w-fit border-[#30363D] text-[#8B949E]">
-            {document.status}
+          <Badge variant="outline" className={readyForAnalysis ? "w-fit border-emerald-500/30 text-emerald-300" : "w-fit border-amber-500/30 text-amber-200"}>
+            {readyForAnalysis ? "analysis ready" : document.status === "completed" ? "needs review" : document.status}
           </Badge>
         </section>
+
+        <Card className="border-[#30363D] bg-[#161B22]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
+              {readyForAnalysis ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <AlertTriangle className="h-5 w-5 text-amber-300" />}
+              Extraction Readiness
+            </CardTitle>
+            <CardDescription className="text-[#8B949E]">
+              Agents should only run after the record has readable text and a source hash anchor.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
+                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><Gauge className="h-3.5 w-3.5" /> OCR quality</p>
+                <p className={qualityScore(document) >= 70 ? "mt-1 text-xl font-semibold text-emerald-300" : "mt-1 text-xl font-semibold text-amber-200"}>{qualityScore(document)}/100</p>
+              </div>
+              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
+                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><FileText className="h-3.5 w-3.5" /> Extracted text</p>
+                <p className="mt-1 text-xl font-semibold text-[#E6EDF3]">{extractedLength(document).toLocaleString()}</p>
+              </div>
+              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
+                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><Hash className="h-3.5 w-3.5" /> Source hash</p>
+                <p className={sourceAnchored(document) ? "mt-1 text-xl font-semibold text-emerald-300" : "mt-1 text-xl font-semibold text-red-300"}>{sourceAnchored(document) ? "Anchored" : "Missing"}</p>
+              </div>
+              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
+                <p className="text-xs text-[#8B949E]">Method</p>
+                <p className="mt-1 truncate text-sm font-semibold text-[#E6EDF3]">{document.extractionMethod || "unknown"}</p>
+              </div>
+            </div>
+            {(document.extractionNote || warnings.length > 0 || !readyForAnalysis) && (
+              <div className="rounded border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
+                {document.extractionNote && <p>{document.extractionNote}</p>}
+                {!sourceAnchored(document) && <p>Missing source hash. Retry OCR before using this file in multi-agent analysis.</p>}
+                {extractedLength(document) === 0 && <p>No extracted text is available. Retry OCR or paste verified text below.</p>}
+                {warnings.length > 0 && <p>Warnings: {warnings.map(warning => warning.replace(/_/g, " ")).join(", ")}</p>}
+              </div>
+            )}
+            {!readyForAnalysis && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRetryExtraction}
+                disabled={retryExtraction.isPending}
+                className="border-amber-500/40 text-amber-100 hover:bg-amber-500/10"
+              >
+                {retryExtraction.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Retry OCR
+              </Button>
+            )}
+          </CardContent>
+        </Card>
 
         {canProcess && (
           <Card className="border-[#30363D] bg-[#161B22]">
@@ -279,8 +386,8 @@ export default function ProcessDocument() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-[#8B949E]">
-              <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{extractedText.length} characters</Badge>
-              <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{extractedText.includes("SOURCE_SHA256:") ? "SHA anchored" : "No source hash"}</Badge>
+              <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{extractedLength(document).toLocaleString()} characters</Badge>
+              <Badge variant="outline" className={sourceAnchored(document) ? "border-emerald-500/30 text-emerald-300" : "border-red-500/30 text-red-300"}>{sourceAnchored(document) ? "SHA anchored" : "No source hash"}</Badge>
               {textSearch.trim() && <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{searchHits} match{searchHits === 1 ? "" : "es"}</Badge>}
             </div>
             <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded border border-[#30363D] bg-[#0D1117] p-4 font-mono text-xs leading-5 text-[#C9D1D9]">

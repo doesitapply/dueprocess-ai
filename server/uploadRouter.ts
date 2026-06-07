@@ -9,6 +9,12 @@ import { createHash } from "node:crypto";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import { enforceDocumentUploadLimit } from "./accessControl";
+import {
+  analyzeExtractionDiagnostics,
+  normalizeExtractedText,
+  withSourceAnchor,
+  type ExtractionResultForDiagnostics,
+} from "./extractionReadiness";
 
 // Helper to generate random suffix for file keys
 function shortHash(value: string) {
@@ -19,26 +25,7 @@ function sha256(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-function normalizeExtractedText(text: string) {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{4,}/g, "\n\n\n")
-    .trim();
-}
-
-function withSourceAnchor(text: string, hash: string) {
-  const normalized = normalizeExtractedText(text);
-  if (!normalized) return "";
-  return `SOURCE_SHA256: ${hash}\n\n${normalized}`;
-}
-
-type ExtractionResult = {
-  text: string;
-  method: string;
-  status: "completed" | "failed";
-  note?: string;
-};
+type ExtractionResult = ExtractionResultForDiagnostics;
 
 function completedExtraction(text: string, method: string, documentHash: string, note?: string): ExtractionResult {
   const anchored = withSourceAnchor(text, documentHash);
@@ -61,6 +48,7 @@ function failedExtraction(method: string, note: string): ExtractionResult {
 
 function documentHasHash(document: typeof documents.$inferSelect, documentHash: string) {
   return (
+    document.documentHash === documentHash ||
     document.extractedText?.startsWith(`SOURCE_SHA256: ${documentHash}`) ||
     document.fileKey?.includes(documentHash.slice(0, 16))
   );
@@ -279,16 +267,27 @@ export const uploadRouter = router({
         .where(eq(documents.userId, userId));
       const duplicate = existingDocuments.find((document) => documentHasHash(document, documentHash));
       if (duplicate) {
+        const diagnostics = analyzeExtractionDiagnostics(
+          {
+            text: duplicate.extractedText || "",
+            method: duplicate.extractionMethod || "duplicate",
+            status: duplicate.status === "completed" ? "completed" : "failed",
+            note: duplicate.extractionNote || undefined,
+          },
+          duplicate.documentHash || documentHash
+        );
         return {
-          success: duplicate.status === "completed" && Boolean(duplicate.extractedText?.trim()),
+          success: duplicate.status === "completed" && diagnostics.textLength > 0 && Boolean(diagnostics.documentHash),
           duplicate: true,
           existingDocumentId: duplicate.id,
           fileUrl: duplicate.fileUrl,
-          documentHash,
+          documentHash: diagnostics.documentHash || documentHash,
           status: duplicate.status,
-          extractionMethod: "duplicate",
+          extractionMethod: duplicate.extractionMethod || "duplicate",
           extractionNote: `Duplicate file detected. Existing Corpus document reused: ${duplicate.fileName}`,
-          textLength: duplicate.extractedText?.length ?? 0,
+          textLength: diagnostics.textLength,
+          extractionQualityScore: diagnostics.qualityScore,
+          extractionWarnings: diagnostics.warnings,
           summary: duplicate.summary ?? "",
         };
       }
@@ -331,6 +330,7 @@ export const uploadRouter = router({
       // Generate embedding for semantic search
       const embedding = extractedText ? await generateEmbedding(extractedText) : [];
       const embeddingJson = JSON.stringify(embedding);
+      const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
 
       // Generate summary using LLM
       let summary = await summarizeExtractedText(extractedText);
@@ -344,6 +344,12 @@ export const uploadRouter = router({
         fileKey,
         mimeType,
         fileSize,
+        documentHash: diagnostics.documentHash || documentHash,
+        extractionMethod: diagnostics.extractionMethod,
+        extractionNote: diagnostics.extractionNote,
+        extractionTextLength: diagnostics.textLength,
+        extractionQualityScore: diagnostics.qualityScore,
+        extractionWarnings: JSON.stringify(diagnostics.warnings),
         extractedText,
         embedding: embeddingJson,
         summary,
@@ -357,7 +363,9 @@ export const uploadRouter = router({
         status: documentStatus,
         extractionMethod: extraction.method,
         extractionNote: extraction.note,
-        textLength: extractedText.length,
+        textLength: diagnostics.textLength,
+        extractionQualityScore: diagnostics.qualityScore,
+        extractionWarnings: diagnostics.warnings,
         summary,
       };
     }),
@@ -390,6 +398,7 @@ export const uploadRouter = router({
           document.fileUrl,
           documentHash
         );
+        const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
         const embedding = extraction.text ? await generateEmbedding(extraction.text) : [];
         let summary = await summarizeExtractedText(extraction.text);
         summary = appendExtractionSummary(summary, extraction);
@@ -397,6 +406,12 @@ export const uploadRouter = router({
         await db
           .update(documents)
           .set({
+            documentHash: diagnostics.documentHash || documentHash,
+            extractionMethod: diagnostics.extractionMethod,
+            extractionNote: diagnostics.extractionNote,
+            extractionTextLength: diagnostics.textLength,
+            extractionQualityScore: diagnostics.qualityScore,
+            extractionWarnings: JSON.stringify(diagnostics.warnings),
             extractedText: extraction.text,
             embedding: JSON.stringify(embedding),
             summary,
@@ -410,14 +425,22 @@ export const uploadRouter = router({
           documentHash,
           extractionMethod: extraction.method,
           extractionNote: extraction.note,
-          textLength: extraction.text.length,
+          textLength: diagnostics.textLength,
+          extractionQualityScore: diagnostics.qualityScore,
+          extractionWarnings: diagnostics.warnings,
           summary,
         };
       } catch (error) {
         const extraction = failedExtraction("retry_error", error instanceof Error ? error.message : "OCR retry failed.");
+        const diagnostics = analyzeExtractionDiagnostics(extraction, document.documentHash || null);
         await db
           .update(documents)
           .set({
+            extractionMethod: diagnostics.extractionMethod,
+            extractionNote: diagnostics.extractionNote,
+            extractionTextLength: diagnostics.textLength,
+            extractionQualityScore: diagnostics.qualityScore,
+            extractionWarnings: JSON.stringify(diagnostics.warnings),
             status: "failed",
             summary: appendExtractionSummary(document.summary || "", extraction),
           })
@@ -428,6 +451,8 @@ export const uploadRouter = router({
           extractionMethod: extraction.method,
           extractionNote: extraction.note,
           textLength: 0,
+          extractionQualityScore: diagnostics.qualityScore,
+          extractionWarnings: diagnostics.warnings,
           summary: extraction.note,
         };
       }

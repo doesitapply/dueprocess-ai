@@ -14,6 +14,16 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 
 type StatusFilter = "all" | "completed" | "active" | "failed";
+type CorpusDocumentRecord = {
+  status: string;
+  extractedText?: string | null;
+  documentHash?: string | null;
+  extractionMethod?: string | null;
+  extractionNote?: string | null;
+  extractionTextLength?: number | null;
+  extractionQualityScore?: number | null;
+  extractionWarnings?: string | null;
+};
 
 function getInitialStatusFilter(): StatusFilter {
   if (typeof window === "undefined") return "all";
@@ -22,14 +32,63 @@ function getInitialStatusFilter(): StatusFilter {
   return "all";
 }
 
-function getStatusBadge(status: string) {
-  if (status === "completed") {
+function parseWarnings(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function sourceAnchored(doc: CorpusDocumentRecord) {
+  return Boolean(doc.documentHash || doc.extractedText?.includes("SOURCE_SHA256:"));
+}
+
+function extractedLength(doc: CorpusDocumentRecord) {
+  if (typeof doc.extractionTextLength === "number" && doc.extractionTextLength > 0) return doc.extractionTextLength;
+  return (doc.extractedText || "").replace(/^SOURCE_SHA256:\s*[a-f0-9]{64}\s*/im, "").trim().length;
+}
+
+function qualityScore(doc: CorpusDocumentRecord) {
+  if (typeof doc.extractionQualityScore === "number" && doc.extractionQualityScore > 0) return doc.extractionQualityScore;
+  if (doc.status !== "completed") return 0;
+  let score = 100;
+  if (!sourceAnchored(doc)) score -= 45;
+  if (extractedLength(doc) === 0) score -= 80;
+  return Math.max(0, Math.min(100, score));
+}
+
+function isReady(doc: CorpusDocumentRecord) {
+  return doc.status === "completed" && sourceAnchored(doc) && extractedLength(doc) > 0 && qualityScore(doc) >= 25;
+}
+
+function isActive(doc: CorpusDocumentRecord) {
+  return doc.status === "processing" || doc.status === "pending";
+}
+
+function needsReview(doc: CorpusDocumentRecord) {
+  return !isReady(doc) && !isActive(doc);
+}
+
+function getStatusBadge(doc: CorpusDocumentRecord) {
+  if (isReady(doc)) {
     return <Badge className="border-0 bg-green-600 text-white"><CheckCircle2 className="mr-1 h-3 w-3" />Ready</Badge>;
   }
-  if (status === "processing" || status === "pending") {
+  if (isActive(doc)) {
     return <Badge className="border-0 bg-amber-600 text-white"><Clock className="mr-1 h-3 w-3" />Processing</Badge>;
   }
   return <Badge className="border-0 bg-red-600 text-white"><AlertTriangle className="mr-1 h-3 w-3" />Needs review</Badge>;
+}
+
+function readinessDetail(doc: CorpusDocumentRecord) {
+  const warnings = parseWarnings(doc.extractionWarnings);
+  if (isReady(doc) && warnings.length === 0) return "Anchored text is ready for agents";
+  if (!sourceAnchored(doc)) return "Missing source hash; retry OCR before analysis";
+  if (extractedLength(doc) === 0) return "No extracted text; retry OCR or upload cleaner copy";
+  if (qualityScore(doc) < 70) return "Review OCR quality before running agents";
+  return warnings[0]?.replace(/_/g, " ") || "Review extraction details";
 }
 
 export default function CorpusCenter() {
@@ -79,6 +138,9 @@ export default function CorpusCenter() {
           else failedCount += 1;
         } else if (result.success) {
           readyCount += 1;
+          if (result.extractionQualityScore < 70) {
+            toast.warning(`${file.name} extracted with OCR quality ${result.extractionQualityScore}/100. Review the text before analysis.`);
+          }
         } else {
           failedCount += 1;
           toast.warning(`${file.name} saved but extraction needs review: ${result.extractionNote || "No usable text extracted."}`);
@@ -102,9 +164,9 @@ export default function CorpusCenter() {
     const allDocuments = documents ?? [];
     return {
       all: allDocuments.length,
-      completed: allDocuments.filter(doc => doc.status === "completed").length,
-      active: allDocuments.filter(doc => doc.status === "pending" || doc.status === "processing").length,
-      failed: allDocuments.filter(doc => doc.status === "failed").length,
+      completed: allDocuments.filter(isReady).length,
+      active: allDocuments.filter(isActive).length,
+      failed: allDocuments.filter(needsReview).length,
     };
   }, [documents]);
 
@@ -112,9 +174,9 @@ export default function CorpusCenter() {
     if (searchQuery && !doc.fileName.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
-    if (statusFilter === "completed" && doc.status !== "completed") return false;
-    if (statusFilter === "active" && doc.status !== "pending" && doc.status !== "processing") return false;
-    if (statusFilter === "failed" && doc.status !== "failed") return false;
+    if (statusFilter === "completed" && !isReady(doc)) return false;
+    if (statusFilter === "active" && !isActive(doc)) return false;
+    if (statusFilter === "failed" && !needsReview(doc)) return false;
     return true;
   });
 
@@ -133,7 +195,7 @@ export default function CorpusCenter() {
   const handleRetryExtraction = async (id: number) => {
     const result = await retryExtraction.mutateAsync({ id });
     if (result.success) {
-      toast.success(`OCR retry complete: ${result.textLength} characters extracted.`);
+      toast.success(`OCR retry complete: ${result.textLength} characters extracted. Quality ${result.extractionQualityScore}/100.`);
     } else {
       toast.warning(`OCR retry still needs review: ${result.extractionNote || "No usable text extracted."}`);
     }
@@ -280,13 +342,28 @@ export default function CorpusCenter() {
                           )}
                           <CardTitle className="truncate text-sm">{doc.fileName}</CardTitle>
                         </div>
-                        {getStatusBadge(doc.status)}
+                        {getStatusBadge(doc)}
                       </div>
                       <CardDescription className="text-xs">
                         Uploaded {new Date(doc.createdAt).toLocaleDateString()}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="rounded border border-green-500/20 bg-black/25 p-2">
+                          <p className="text-gray-500">OCR</p>
+                          <p className={qualityScore(doc) >= 70 ? "font-semibold text-green-300" : "font-semibold text-amber-200"}>{qualityScore(doc)}/100</p>
+                        </div>
+                        <div className="rounded border border-green-500/20 bg-black/25 p-2">
+                          <p className="text-gray-500">Text</p>
+                          <p className="font-semibold text-gray-200">{extractedLength(doc).toLocaleString()}</p>
+                        </div>
+                        <div className="rounded border border-green-500/20 bg-black/25 p-2">
+                          <p className="text-gray-500">Hash</p>
+                          <p className={sourceAnchored(doc) ? "font-semibold text-green-300" : "font-semibold text-red-300"}>{sourceAnchored(doc) ? "Yes" : "No"}</p>
+                        </div>
+                      </div>
+                      <p className="min-h-8 text-xs leading-4 text-gray-400">{readinessDetail(doc)}</p>
                       <div className="flex gap-2">
                         <Link href={`/process/${doc.id}`} className="flex-1">
                           <Button size="sm" variant="outline" className="w-full border-green-500/30">
@@ -294,7 +371,7 @@ export default function CorpusCenter() {
                             View
                           </Button>
                         </Link>
-                        {doc.status === "failed" && (
+                        {needsReview(doc) && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -346,16 +423,23 @@ export default function CorpusCenter() {
                             <p className="text-sm text-gray-400">
                               {new Date(doc.createdAt).toLocaleString()}
                             </p>
+                            <p className="text-xs text-gray-500">{extractedLength(doc).toLocaleString()} chars · {doc.extractionMethod || "method unknown"} · {readinessDetail(doc)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {getStatusBadge(doc.status)}
+                          {getStatusBadge(doc)}
+                          <Badge variant="outline" className={qualityScore(doc) >= 70 ? "border-green-500/30 text-green-300" : "border-amber-500/30 text-amber-200"}>
+                            OCR {qualityScore(doc)}
+                          </Badge>
+                          <Badge variant="outline" className={sourceAnchored(doc) ? "border-green-500/30 text-green-300" : "border-red-500/30 text-red-300"}>
+                            {sourceAnchored(doc) ? "SHA" : "No SHA"}
+                          </Badge>
                           <Link href={`/process/${doc.id}`}>
                             <Button size="sm" variant="outline" className="border-green-500/30">
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
-                          {doc.status === "failed" && (
+                          {needsReview(doc) && (
                             <Button
                               size="sm"
                               variant="outline"

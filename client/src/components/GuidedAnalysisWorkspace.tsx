@@ -46,6 +46,11 @@ type CorpusDocument = {
   mimeType: string | null;
   status: "pending" | "processing" | "completed" | "failed";
   extractedText?: string | null;
+  documentHash?: string | null;
+  extractionMethod?: string | null;
+  extractionTextLength?: number | null;
+  extractionQualityScore?: number | null;
+  extractionWarnings?: string | null;
   createdAt?: Date | string;
 };
 
@@ -281,7 +286,34 @@ function uniqueIds(ids: string[]): string[] {
 }
 
 function isAnalysisReady(document: CorpusDocument): boolean {
-  return document.status === "completed" && Boolean(document.extractedText?.trim());
+  return document.status === "completed" && sourceAnchored(document) && extractedLength(document) > 0 && qualityScore(document) >= 25;
+}
+
+function sourceAnchored(document: CorpusDocument): boolean {
+  return Boolean(document.documentHash || document.extractedText?.includes("SOURCE_SHA256:"));
+}
+
+function extractedLength(document: CorpusDocument): number {
+  if (typeof document.extractionTextLength === "number" && document.extractionTextLength > 0) return document.extractionTextLength;
+  return (document.extractedText || "").replace(/^SOURCE_SHA256:\s*[a-f0-9]{64}\s*/im, "").trim().length;
+}
+
+function qualityScore(document: CorpusDocument): number {
+  if (typeof document.extractionQualityScore === "number" && document.extractionQualityScore > 0) return document.extractionQualityScore;
+  if (document.status !== "completed") return 0;
+  let score = 100;
+  if (!sourceAnchored(document)) score -= 45;
+  if (extractedLength(document) === 0) score -= 80;
+  return Math.max(0, Math.min(100, score));
+}
+
+function inDateScope(document: CorpusDocument, fromDate: string, toDate: string): boolean {
+  if (!fromDate && !toDate) return true;
+  const createdAt = document.createdAt ? new Date(document.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
+  if (fromDate && createdAt < new Date(`${fromDate}T00:00:00.000`)) return false;
+  if (toDate && createdAt > new Date(`${toDate}T23:59:59.999`)) return false;
+  return true;
 }
 
 function safeFileName(value: string): string {
@@ -592,7 +624,9 @@ function EvidenceTimelinePanel({
                 <div className="min-w-0 pb-2">
                   <div className="text-xs text-zinc-500 dark:text-slate-500">{formatShortDate(document.createdAt)}</div>
                   <div className="truncate text-sm font-medium text-zinc-950 dark:text-white">{document.fileName}</div>
-                  <div className="text-xs text-zinc-500 dark:text-slate-500">{isAnalysisReady(document) ? "ready for analysis" : document.status}</div>
+                  <div className="text-xs text-zinc-500 dark:text-slate-500">
+                    {isAnalysisReady(document) ? "ready for analysis" : sourceAnchored(document) ? document.status : "missing source hash"} · OCR {qualityScore(document)}
+                  </div>
                 </div>
               </div>
             ))}
@@ -745,7 +779,9 @@ export function GuidedAnalysisWorkspace({
     return usableIds.length > 0 && usableIds.every((agentId) => selectedAgentIds.includes(agentId)) && selectedAgentIds.length === usableIds.length;
   });
 
-  const matchingDocumentCount = scope === "file" ? selectedDocumentIds.length : readyDocuments.length;
+  const timeScopedReadyDocuments = readyDocuments.filter((document) => inDateScope(document, fromDate, toDate));
+  const timeScopedBlockedDocuments = blockedDocuments.filter((document) => inDateScope(document, fromDate, toDate));
+  const matchingDocumentCount = scope === "file" ? selectedDocumentIds.length : scope === "time" ? timeScopedReadyDocuments.length : readyDocuments.length;
   const qcClearedCount = savedFindings.filter((finding) => ["approved", "not_required", "downgraded"].includes(finding.qcStatus || "")).length;
   const highLeverageCount = savedFindings.filter((finding) => finding.leverageScore >= 80).length;
   const needsProofCount = savedFindings.filter((finding) => ["pending", "needs_more_proof", "blocked"].includes(finding.qcStatus || "")).length;
@@ -768,8 +804,16 @@ export function GuidedAnalysisWorkspace({
       toast.error("Upload at least one record in Corpus before running analysis.");
       return;
     }
-    if ((scope === "all" || scope === "time") && blockedDocuments.length > 0) {
+    if (scope === "all" && blockedDocuments.length > 0) {
       toast.error("Wait until every Corpus file is processed, or choose only ready files with Selected files.");
+      return;
+    }
+    if (scope === "time" && timeScopedBlockedDocuments.length > 0) {
+      toast.error("The selected date range includes files that need extraction review. Narrow the range or fix those files first.");
+      return;
+    }
+    if (scope === "time" && timeScopedReadyDocuments.length === 0) {
+      toast.error("No ready files match that date range.");
       return;
     }
     if (scope === "file" && selectedDocumentIds.length === 0) {
@@ -936,7 +980,9 @@ export function GuidedAnalysisWorkspace({
                             <Checkbox checked={checked} disabled={!ready} onCheckedChange={() => ready && toggleDocument(document.id)} className="mt-1" />
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-medium text-zinc-950 dark:text-white">{document.fileName}</span>
-                              <span className="text-xs text-zinc-500 dark:text-slate-500">{document.mimeType || "unknown"} · {ready ? "ready" : document.status}</span>
+                              <span className="text-xs text-zinc-500 dark:text-slate-500">
+                                {document.mimeType || "unknown"} · {ready ? "ready" : sourceAnchored(document) ? document.status : "missing source hash"} · OCR {qualityScore(document)}
+                              </span>
                             </span>
                           </label>
                         );
@@ -960,7 +1006,7 @@ export function GuidedAnalysisWorkspace({
 
                 <Button
                   onClick={runAnalysis}
-                  disabled={processScope.isPending || documentsQuery.isLoading || catalogQuery.isLoading || readyDocuments.length === 0 || ((scope === "all" || scope === "time") && blockedDocuments.length > 0)}
+                  disabled={processScope.isPending || documentsQuery.isLoading || catalogQuery.isLoading || readyDocuments.length === 0 || (scope === "all" && blockedDocuments.length > 0) || (scope === "time" && (timeScopedBlockedDocuments.length > 0 || timeScopedReadyDocuments.length === 0))}
                   className={cn("min-h-12 h-auto w-full gap-2 whitespace-normal px-3 py-3 text-sm sm:text-base", styles.button)}
                 >
                   {processScope.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Running {workspaceNoun}</> : <><Play className="h-4 w-4" /> Run {selectedWorkflow?.name || title}</>}

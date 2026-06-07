@@ -69,13 +69,21 @@ export const documents = mysqlTable("documents", {
   fileKey: text("fileKey").notNull(),
   mimeType: varchar("mimeType", { length: 100 }),
   fileSize: int("fileSize"),
-  extractedText: text("extractedText"), // Full text content extracted from file
+  documentHash: varchar("documentHash", { length: 64 }),
+  extractionMethod: varchar("extractionMethod", { length: 64 }),
+  extractionNote: text("extractionNote"),
+  extractionTextLength: int("extractionTextLength").default(0).notNull(),
+  extractionQualityScore: int("extractionQualityScore").default(0).notNull(),
+  extractionWarnings: text("extractionWarnings"), // JSON array
+  extractedText: longtext("extractedText"), // Full text content extracted from file
   embedding: text("embedding"), // JSON string of vector embedding for semantic search
   status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
-  summary: text("summary"),
+  summary: longtext("summary"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("documents_user_hash_idx").on(table.userId, table.documentHash),
+]);
 
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;
