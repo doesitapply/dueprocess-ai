@@ -2,12 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
 import Stripe from "stripe";
 import {
-  AGENT_SUBSCRIPTIONS,
-  SECTOR_SUBSCRIPTIONS,
   PLATFORM_SUBSCRIPTIONS,
-  type AgentSubscription,
-  type SectorSubscription,
-  type PlatformSubscription
+  type SubscriptionTier
 } from "./products";
 import {
   getSubscriptionByUserId,
@@ -31,6 +27,11 @@ function getStripeClient() {
   });
 }
 
+const checkoutPlanSchema = z.enum(["free", "advocate", "litigator", "firm"] satisfies [
+  SubscriptionTier,
+  ...SubscriptionTier[],
+]);
+
 export const stripeRouter = router({
   // Get user's current subscription
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
@@ -50,20 +51,10 @@ export const stripeRouter = router({
   // Create Stripe Checkout Session
   createCheckoutSession: protectedProcedure
     .input(z.object({
-      planId: z.string(),
+      planId: checkoutPlanSchema,
     }))
     .mutation(async ({ ctx, input }) => {
-      // Search for plan in all subscription types
-      const agentPlan = AGENT_SUBSCRIPTIONS[input.planId];
-      const sectorPlan = SECTOR_SUBSCRIPTIONS[input.planId];
-      const platformPlan = PLATFORM_SUBSCRIPTIONS[input.planId];
-
-      const plan: AgentSubscription | SectorSubscription | PlatformSubscription | undefined =
-        agentPlan || sectorPlan || platformPlan;
-
-      if (!plan) {
-        throw new Error("Invalid plan selected");
-      }
+      const plan = PLATFORM_SUBSCRIPTIONS[input.planId];
 
       if (plan.id === "free") {
         throw new Error("The free tier does not require checkout.");

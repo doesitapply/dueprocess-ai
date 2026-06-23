@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupStripeWebhook } from "../stripeWebhook";
+import { registerMobileRoutes } from "../mobileRouter";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,6 +41,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "100mb", extended: true }));
   // Local auth routes under /api/auth/*
   registerAuthRoutes(app);
+  // Native mobile REST API
+  registerMobileRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

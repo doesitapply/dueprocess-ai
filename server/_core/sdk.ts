@@ -114,13 +114,9 @@ class LocalSessionService {
     }
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
-    const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
-    const session = await this.verifySession(sessionCookie);
-
+  private async userFromSession(session: SessionPayload | null): Promise<User> {
     if (!session) {
-      throw ForbiddenError("Invalid session cookie");
+      throw ForbiddenError("Invalid session");
     }
 
     const signedInAt = new Date();
@@ -151,6 +147,23 @@ class LocalSessionService {
     }
 
     return user;
+  }
+
+  async authenticateRequest(req: Request): Promise<User> {
+    const cookies = this.parseCookies(req.headers.cookie);
+    const sessionCookie = cookies.get(COOKIE_NAME);
+    const session = await this.verifySession(sessionCookie);
+    return this.userFromSession(session);
+  }
+
+  async authenticateBearerToken(authorization: string | undefined): Promise<User> {
+    const [scheme, token] = (authorization || "").split(/\s+/, 2);
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
+      throw ForbiddenError("Missing bearer token");
+    }
+
+    const session = await this.verifySession(token);
+    return this.userFromSession(session);
   }
 }
 

@@ -464,7 +464,7 @@ export const reportRouter = router({
         .map((output, index) => `${index + 1}. ${output.agentName || output.agentId || "Agent"}\n${outputText(output).slice(0, 3000)}`)
         .join("\n\n")
         .slice(0, 30000);
-      const findingDigest = findings
+      const findingDigest = reportFindings
         .map((finding, index) => `${index + 1}. ${findingText(finding)}`)
         .join("\n\n")
         .slice(0, 30000);
@@ -498,9 +498,11 @@ export const reportRouter = router({
         });
       }
 
+      const summaryContent = summaryResponse.choices[0]?.message?.content;
       const executiveSummary =
-        summaryResponse.choices[0]?.message?.content ||
-        "No report summary was generated. Review the selected source documents and saved agent outputs.";
+        typeof summaryContent === "string" && summaryContent.trim().length > 0
+          ? summaryContent
+          : "No report summary was generated. Review the selected source documents and saved agent outputs.";
 
       const markdown = buildPlainReport({
         title,
@@ -512,7 +514,7 @@ export const reportRouter = router({
         outputs: outputsForReport,
         legacyAgentOutputsIncluded,
         legacyAgentOutputsAvailable: outputs.length,
-        findings,
+        findings: reportFindings,
         executiveSummary,
       });
 
@@ -545,7 +547,7 @@ export const reportRouter = router({
           documents: selectedDocuments.length,
           savedAgentOutputs: outputs.length,
           readyDocuments: selectedDocuments.filter(isDocumentReadyForAnalysis).length,
-          structuredFindings: findings.length,
+          structuredFindings: reportFindings.length,
           blockedFindingsIncluded,
           legacyAgentOutputsIncluded,
           legacyAgentOutputsAvailable: outputs.length,
