@@ -1,12 +1,36 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  CommandMain,
+  CommandSurface,
+  CommandTopBar,
+} from "@/components/command-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, FileText, Gauge, Gavel, Hash, Loader2, Play, RefreshCw, Scale, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  FileText,
+  Gauge,
+  Gavel,
+  Hash,
+  Loader2,
+  Play,
+  RefreshCw,
+  Scale,
+  Search,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { toast } from "sonner";
@@ -58,19 +82,29 @@ function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
   try {
     const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
   } catch {
     return [];
   }
 }
 
 function sourceAnchored(document: ExtractionDocument) {
-  return Boolean(document.documentHash || document.extractedText?.includes("SOURCE_SHA256:"));
+  return Boolean(
+    document.documentHash || document.extractedText?.includes("SOURCE_SHA256:")
+  );
 }
 
 function extractedLength(document: ExtractionDocument) {
-  if (typeof document.extractionTextLength === "number" && document.extractionTextLength > 0) return document.extractionTextLength;
-  return (document.extractedText || "").replace(/^SOURCE_SHA256:\s*[a-f0-9]{64}\s*/im, "").trim().length;
+  if (
+    typeof document.extractionTextLength === "number" &&
+    document.extractionTextLength > 0
+  )
+    return document.extractionTextLength;
+  return (document.extractedText || "")
+    .replace(/^SOURCE_SHA256:\s*[a-f0-9]{64}\s*/im, "")
+    .trim().length;
 }
 
 function extractionWarnings(document: ExtractionDocument) {
@@ -78,7 +112,11 @@ function extractionWarnings(document: ExtractionDocument) {
 }
 
 function qualityScore(document: ExtractionDocument) {
-  if (typeof document.extractionQualityScore === "number" && document.extractionQualityScore > 0) return document.extractionQualityScore;
+  if (
+    typeof document.extractionQualityScore === "number" &&
+    document.extractionQualityScore > 0
+  )
+    return document.extractionQualityScore;
   if (document.status !== "completed") return 0;
   let score = 100;
   if (!sourceAnchored(document)) score -= 45;
@@ -96,17 +134,20 @@ function isAnalysisReady(document: ExtractionDocument) {
     sourceAnchored(document) &&
     extractedLength(document) >= ANALYSIS_READY_MIN_TEXT_LENGTH &&
     qualityScore(document) >= ANALYSIS_READY_MIN_QUALITY_SCORE &&
-    !warnings.some((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning))
+    !warnings.some(warning => ANALYSIS_BLOCKING_WARNINGS.has(warning))
   );
 }
 
-function parseForensicAnalysis(output: string | null | undefined): ForensicAnalysis | null {
+function parseForensicAnalysis(
+  output: string | null | undefined
+): ForensicAnalysis | null {
   if (!output) return null;
   try {
     const parsed: unknown = JSON.parse(output);
     if (!parsed || typeof parsed !== "object") return null;
     const record = parsed as Record<string, unknown>;
-    if (!Array.isArray(record.findings) || !Array.isArray(record.authorities)) return null;
+    if (!Array.isArray(record.findings) || !Array.isArray(record.authorities))
+      return null;
 
     return {
       summary: typeof record.summary === "string" ? record.summary : "",
@@ -124,9 +165,13 @@ function parseForensicAnalysis(output: string | null | undefined): ForensicAnaly
       authorities: record.authorities.filter((item): item is LegalAuthority => {
         if (!item || typeof item !== "object") return false;
         const authority = item as Record<string, unknown>;
-        return typeof authority.citation === "string" && typeof authority.relevance === "string";
+        return (
+          typeof authority.citation === "string" &&
+          typeof authority.relevance === "string"
+        );
       }),
-      motionScaffold: typeof record.motionScaffold === "string" ? record.motionScaffold : "",
+      motionScaffold:
+        typeof record.motionScaffold === "string" ? record.motionScaffold : "",
     };
   } catch {
     return null;
@@ -175,9 +220,13 @@ export default function ProcessDocument() {
   const retryExtraction = trpc.upload.retryExtraction.useMutation({
     onSuccess: result => {
       if (result.success) {
-        toast.success(`OCR retry complete: ${result.textLength} characters extracted. Quality ${result.extractionQualityScore}/100.`);
+        toast.success(
+          `OCR retry complete: ${result.textLength} characters extracted. Quality ${result.extractionQualityScore}/100.`
+        );
       } else {
-        toast.warning(`OCR retry still needs review: ${result.extractionNote || "No usable text extracted."}`);
+        toast.warning(
+          `OCR retry still needs review: ${result.extractionNote || "No usable text extracted."}`
+        );
       }
       refetch();
     },
@@ -212,7 +261,8 @@ export default function ProcessDocument() {
         issue,
         severity: "medium" as const,
         evidence: "See source document.",
-        reasoning: "Legacy analysis output did not include structured reasoning.",
+        reasoning:
+          "Legacy analysis output did not include structured reasoning.",
         recommendedAction: "Review the motion scaffold and source record.",
       })),
       authorities: parseJsonArray(data.outputs.clerkCaseLaw).map(citation => ({
@@ -225,116 +275,213 @@ export default function ProcessDocument() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0D1117]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#1F6FEB]" />
-      </div>
+      <CommandSurface>
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-300" />
+        </div>
+      </CommandSurface>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0D1117]">
-        <div className="space-y-4 text-center">
-          <h2 className="text-2xl font-semibold text-[#E6EDF3]">Please sign in to continue</h2>
-          <a href={getLoginUrl()}>
-            <Button size="lg">Sign In</Button>
-          </a>
+      <CommandSurface>
+        <div className="flex min-h-screen flex-col items-center justify-center px-6">
+          <div className="space-y-4 text-center">
+            <h2 className="text-2xl font-semibold text-zinc-950 dark:text-white">
+              Please sign in to continue
+            </h2>
+            <a href={getLoginUrl()}>
+              <Button size="lg">Sign In</Button>
+            </a>
+          </div>
         </div>
-      </div>
+      </CommandSurface>
     );
   }
 
   if (!data) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0D1117]">
-        <div className="space-y-4 text-center">
-          <h2 className="text-2xl font-semibold text-[#E6EDF3]">Document not found</h2>
-          <Link href="/dashboard">
-            <Button>Back to Dashboard</Button>
-          </Link>
+      <CommandSurface>
+        <div className="flex min-h-screen flex-col items-center justify-center px-6">
+          <div className="space-y-4 text-center">
+            <h2 className="text-2xl font-semibold text-zinc-950 dark:text-white">
+              Document not found
+            </h2>
+            <Link href="/dashboard">
+              <Button>Back to Dashboard</Button>
+            </Link>
+          </div>
         </div>
-      </div>
+      </CommandSurface>
     );
   }
 
   const { document } = data;
   const readyForAnalysis = isAnalysisReady(document);
-  const canProcess = document.status === "pending" || document.status === "failed" || !readyForAnalysis;
+  const canProcess =
+    document.status === "pending" ||
+    document.status === "failed" ||
+    !readyForAnalysis;
   const hasAnalysis = Boolean(analysis && document.status === "completed");
   const extractedText = document.extractedText || "";
   const warnings = extractionWarnings(document);
   const searchHits = textSearch.trim()
-    ? (extractedText.toLowerCase().match(new RegExp(textSearch.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").toLowerCase(), "g")) || []).length
+    ? (
+        extractedText.toLowerCase().match(
+          new RegExp(
+            textSearch
+              .trim()
+              .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+              .toLowerCase(),
+            "g"
+          )
+        ) || []
+      ).length
     : 0;
 
   return (
-    <div className="min-h-screen bg-[#0D1117] text-[#E6EDF3]">
-      <header className="sticky top-0 z-10 border-b border-[#30363D] bg-[#161B22]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="text-[#E6EDF3] hover:bg-[#1C2128]">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Dashboard
-            </Button>
-          </Link>
-          <Link href="/">
-            <div className="flex cursor-pointer items-center gap-3">
-              {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-8 w-8" />}
-              <h1 className="text-lg font-semibold">{APP_TITLE}</h1>
-            </div>
-          </Link>
-        </div>
-      </header>
+    <CommandSurface>
+      <CommandTopBar title="Document Review" eyebrow="Corpus Source" />
 
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-        <section className="flex flex-col justify-between gap-4 border-b border-[#30363D] pb-6 md:flex-row md:items-start">
-          <div>
-            <h1 className="text-2xl font-semibold">{document.fileName}</h1>
-            {document.summary && <p className="mt-2 max-w-3xl text-sm text-[#8B949E]">{document.summary}</p>}
+      <CommandMain className="max-w-6xl space-y-8">
+        <section className="rounded-md border border-amber-500/25 bg-white/82 p-4 shadow-sm backdrop-blur dark:border-amber-400/25 dark:bg-[#0c1418]/84 sm:p-5">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
+                Document Review
+              </p>
+              <h1 className="mt-2 break-words text-2xl font-semibold text-zinc-950 dark:text-white">
+                {document.fileName}
+              </h1>
+              {document.summary && (
+                <p className="mt-2 max-w-3xl text-sm text-zinc-600 dark:text-slate-400">
+                  {document.summary}
+                </p>
+              )}
+            </div>
+            <Badge
+              variant="outline"
+              className={
+                readyForAnalysis
+                  ? "w-fit border-emerald-500/30 text-emerald-300"
+                  : "w-fit border-amber-500/30 text-amber-200"
+              }
+            >
+              {readyForAnalysis
+                ? "analysis ready"
+                : document.status === "completed"
+                  ? "needs review"
+                  : document.status}
+            </Badge>
           </div>
-          <Badge variant="outline" className={readyForAnalysis ? "w-fit border-emerald-500/30 text-emerald-300" : "w-fit border-amber-500/30 text-amber-200"}>
-            {readyForAnalysis ? "analysis ready" : document.status === "completed" ? "needs review" : document.status}
-          </Badge>
         </section>
 
-        <Card className="border-[#30363D] bg-[#161B22]">
+        <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-              {readyForAnalysis ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <AlertTriangle className="h-5 w-5 text-amber-300" />}
+            <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+              {readyForAnalysis ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-300" />
+              )}
               Extraction Readiness
             </CardTitle>
-            <CardDescription className="text-[#8B949E]">
-              Agents should only run after the record has readable text and a source hash anchor.
+            <CardDescription className="text-zinc-500 dark:text-slate-400">
+              Agents should only run after the record has readable text and a
+              source hash anchor.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
-                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><Gauge className="h-3.5 w-3.5" /> OCR quality</p>
-                <p className={qualityScore(document) >= 70 ? "mt-1 text-xl font-semibold text-emerald-300" : "mt-1 text-xl font-semibold text-amber-200"}>{qualityScore(document)}/100</p>
+              <div className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3">
+                <p className="flex items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
+                  <Gauge className="h-3.5 w-3.5" /> OCR quality
+                </p>
+                <p
+                  className={
+                    qualityScore(document) >= 70
+                      ? "mt-1 text-xl font-semibold text-emerald-300"
+                      : "mt-1 text-xl font-semibold text-amber-200"
+                  }
+                >
+                  {qualityScore(document)}/100
+                </p>
               </div>
-              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
-                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><FileText className="h-3.5 w-3.5" /> Extracted text</p>
-                <p className="mt-1 text-xl font-semibold text-[#E6EDF3]">{extractedLength(document).toLocaleString()}</p>
+              <div className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3">
+                <p className="flex items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
+                  <FileText className="h-3.5 w-3.5" /> Extracted text
+                </p>
+                <p className="mt-1 text-xl font-semibold text-zinc-950 dark:text-white">
+                  {extractedLength(document).toLocaleString()}
+                </p>
               </div>
-              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
-                <p className="flex items-center gap-2 text-xs text-[#8B949E]"><Hash className="h-3.5 w-3.5" /> Source hash</p>
-                <p className={sourceAnchored(document) ? "mt-1 text-xl font-semibold text-emerald-300" : "mt-1 text-xl font-semibold text-red-300"}>{sourceAnchored(document) ? "Anchored" : "Missing"}</p>
+              <div className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3">
+                <p className="flex items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
+                  <Hash className="h-3.5 w-3.5" /> Source hash
+                </p>
+                <p
+                  className={
+                    sourceAnchored(document)
+                      ? "mt-1 text-xl font-semibold text-emerald-300"
+                      : "mt-1 text-xl font-semibold text-red-300"
+                  }
+                >
+                  {sourceAnchored(document) ? "Anchored" : "Missing"}
+                </p>
               </div>
-              <div className="rounded border border-[#30363D] bg-[#0D1117] p-3">
-                <p className="text-xs text-[#8B949E]">Method</p>
-                <p className="mt-1 truncate text-sm font-semibold text-[#E6EDF3]">{document.extractionMethod || "unknown"}</p>
+              <div className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3">
+                <p className="text-xs text-zinc-500 dark:text-slate-400">
+                  Method
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold text-zinc-950 dark:text-white">
+                  {document.extractionMethod || "unknown"}
+                </p>
               </div>
             </div>
-            {(document.extractionNote || warnings.length > 0 || !readyForAnalysis) && (
-              <div className="rounded border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
+            {(document.extractionNote ||
+              warnings.length > 0 ||
+              !readyForAnalysis) && (
+              <div className="rounded border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-800 dark:text-amber-100">
                 {document.extractionNote && <p>{document.extractionNote}</p>}
-                {!sourceAnchored(document) && <p>Missing source hash. Retry OCR before using this file in multi-agent analysis.</p>}
-                {extractedLength(document) === 0 && <p>No extracted text is available. Retry OCR or paste verified text below.</p>}
-                {extractedLength(document) > 0 && extractedLength(document) < ANALYSIS_READY_MIN_TEXT_LENGTH && <p>Only {extractedLength(document).toLocaleString()} characters were extracted. Review OCR before agent analysis.</p>}
-                {warnings.includes("low_text_signal") && <p>The extracted text has low readable signal. Retry OCR or upload a cleaner copy.</p>}
-                {qualityScore(document) < ANALYSIS_READY_MIN_QUALITY_SCORE && <p>OCR quality is below the analysis-ready threshold.</p>}
-                {warnings.length > 0 && <p>Warnings: {warnings.map(warning => warning.replace(/_/g, " ")).join(", ")}</p>}
+                {!sourceAnchored(document) && (
+                  <p>
+                    Missing source hash. Retry OCR before using this file in
+                    multi-agent analysis.
+                  </p>
+                )}
+                {extractedLength(document) === 0 && (
+                  <p>
+                    No extracted text is available. Retry OCR or paste verified
+                    text below.
+                  </p>
+                )}
+                {extractedLength(document) > 0 &&
+                  extractedLength(document) <
+                    ANALYSIS_READY_MIN_TEXT_LENGTH && (
+                    <p>
+                      Only {extractedLength(document).toLocaleString()}{" "}
+                      characters were extracted. Review OCR before agent
+                      analysis.
+                    </p>
+                  )}
+                {warnings.includes("low_text_signal") && (
+                  <p>
+                    The extracted text has low readable signal. Retry OCR or
+                    upload a cleaner copy.
+                  </p>
+                )}
+                {qualityScore(document) < ANALYSIS_READY_MIN_QUALITY_SCORE && (
+                  <p>OCR quality is below the analysis-ready threshold.</p>
+                )}
+                {warnings.length > 0 && (
+                  <p>
+                    Warnings:{" "}
+                    {warnings
+                      .map(warning => warning.replace(/_/g, " "))
+                      .join(", ")}
+                  </p>
+                )}
               </div>
             )}
             {!readyForAnalysis && (
@@ -343,9 +490,13 @@ export default function ProcessDocument() {
                 variant="outline"
                 onClick={handleRetryExtraction}
                 disabled={retryExtraction.isPending}
-                className="border-amber-500/40 text-amber-100 hover:bg-amber-500/10"
+                className="border-amber-500/40 text-amber-800 hover:bg-amber-500/10 dark:text-amber-100"
               >
-                {retryExtraction.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                {retryExtraction.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
                 Retry OCR
               </Button>
             )}
@@ -353,14 +504,15 @@ export default function ProcessDocument() {
         </Card>
 
         {canProcess && (
-          <Card className="border-[#30363D] bg-[#161B22]">
+          <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-                <Play className="h-5 w-5 text-[#1F6FEB]" />
+              <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+                <Play className="h-5 w-5 text-blue-700 dark:text-blue-300" />
                 Run forensic analysis
               </CardTitle>
-              <CardDescription className="text-[#8B949E]">
-                Paste extracted document text. The analysis will return findings, authority, evidence quotes, and a motion scaffold.
+              <CardDescription className="text-zinc-500 dark:text-slate-400">
+                Paste extracted document text. The analysis will return
+                findings, authority, evidence quotes, and a motion scaffold.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -368,10 +520,15 @@ export default function ProcessDocument() {
                 placeholder="Paste court filing, transcript, discovery, or record text here..."
                 value={documentText}
                 onChange={event => setDocumentText(event.target.value)}
-                className="min-h-[220px] border-[#30363D] bg-[#0D1117] font-mono text-sm text-[#E6EDF3]"
+                className="min-h-[220px] border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 font-mono text-sm text-zinc-950 dark:text-white"
                 disabled={isProcessing}
               />
-              <Button onClick={handleProcess} disabled={isProcessing || !documentText.trim()} size="lg" className="w-full bg-[#1F6FEB]">
+              <Button
+                onClick={handleProcess}
+                disabled={isProcessing || !documentText.trim()}
+                size="lg"
+                className="w-full bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-amber-300 dark:text-zinc-950 dark:hover:bg-amber-200"
+              >
                 {isProcessing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -388,43 +545,68 @@ export default function ProcessDocument() {
           </Card>
         )}
 
-        <Card className="border-[#30363D] bg-[#161B22]">
+        <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-              <FileText className="h-5 w-5 text-[#1F6FEB]" />
+            <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+              <FileText className="h-5 w-5 text-blue-700 dark:text-blue-300" />
               Extracted Text
             </CardTitle>
-            <CardDescription className="text-[#8B949E]">
-              This is the source text agents use. If it is empty or wrong, retry OCR or upload a cleaner copy before analysis.
+            <CardDescription className="text-zinc-500 dark:text-slate-400">
+              This is the source text agents use. If it is empty or wrong, retry
+              OCR or upload a cleaner copy before analysis.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8B949E]" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500 dark:text-slate-400" />
               <Input
                 value={textSearch}
                 onChange={event => setTextSearch(event.target.value)}
                 placeholder="Search extracted text..."
-                className="border-[#30363D] bg-[#0D1117] pl-9 text-[#E6EDF3]"
+                className="border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 pl-9 text-zinc-950 dark:text-white"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[#8B949E]">
-              <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{extractedLength(document).toLocaleString()} characters</Badge>
-              <Badge variant="outline" className={sourceAnchored(document) ? "border-emerald-500/30 text-emerald-300" : "border-red-500/30 text-red-300"}>{sourceAnchored(document) ? "SHA anchored" : "No source hash"}</Badge>
-              {textSearch.trim() && <Badge variant="outline" className="border-[#30363D] text-[#8B949E]">{searchHits} match{searchHits === 1 ? "" : "es"}</Badge>}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-slate-400">
+              <Badge
+                variant="outline"
+                className="border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-slate-400"
+              >
+                {extractedLength(document).toLocaleString()} characters
+              </Badge>
+              <Badge
+                variant="outline"
+                className={
+                  sourceAnchored(document)
+                    ? "border-emerald-500/30 text-emerald-300"
+                    : "border-red-500/30 text-red-300"
+                }
+              >
+                {sourceAnchored(document) ? "SHA anchored" : "No source hash"}
+              </Badge>
+              {textSearch.trim() && (
+                <Badge
+                  variant="outline"
+                  className="border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-slate-400"
+                >
+                  {searchHits} match{searchHits === 1 ? "" : "es"}
+                </Badge>
+              )}
             </div>
-            <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded border border-[#30363D] bg-[#0D1117] p-4 font-mono text-xs leading-5 text-[#C9D1D9]">
-              {extractedText || "No extracted text is available for this document."}
+            <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-4 font-mono text-xs leading-5 text-zinc-700 dark:text-slate-300">
+              {extractedText ||
+                "No extracted text is available for this document."}
             </pre>
           </CardContent>
         </Card>
 
         {document.status === "processing" && (
-          <Card className="border-[#30363D] bg-[#161B22]">
+          <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
             <CardContent className="p-12 text-center">
-              <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-[#1F6FEB]" />
+              <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-blue-700 dark:text-blue-300" />
               <h3 className="text-lg font-semibold">Analyzing document</h3>
-              <p className="mt-2 text-sm text-[#8B949E]">Extracting findings, authorities, and action items.</p>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-slate-400">
+                Extracting findings, authorities, and action items.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -432,48 +614,71 @@ export default function ProcessDocument() {
         {hasAnalysis && analysis && (
           <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
             <section className="space-y-4">
-              <Card className="border-[#30363D] bg-[#161B22]">
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-                    <Gavel className="h-5 w-5 text-[#1F6FEB]" />
+                  <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+                    <Gavel className="h-5 w-5 text-blue-700 dark:text-blue-300" />
                     Findings
                   </CardTitle>
-                  <CardDescription className="text-[#8B949E]">{analysis.summary}</CardDescription>
+                  <CardDescription className="text-zinc-500 dark:text-slate-400">
+                    {analysis.summary}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {analysis.findings.length === 0 ? (
-                    <p className="text-sm text-[#8B949E]">No structured findings were returned.</p>
+                    <p className="text-sm text-zinc-500 dark:text-slate-400">
+                      No structured findings were returned.
+                    </p>
                   ) : (
                     analysis.findings.map((finding, index) => (
-                      <div key={`${finding.issue}-${index}`} className="rounded border border-[#30363D] bg-[#0D1117] p-3">
+                      <div
+                        key={`${finding.issue}-${index}`}
+                        className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3"
+                      >
                         <div className="mb-2 flex items-start justify-between gap-3">
-                          <h3 className="text-sm font-semibold">{finding.issue}</h3>
-                          <Badge variant="outline" className={severityClass(finding.severity)}>
+                          <h3 className="text-sm font-semibold">
+                            {finding.issue}
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className={severityClass(finding.severity)}
+                          >
                             {finding.severity}
                           </Badge>
                         </div>
-                        <p className="text-xs text-[#8B949E]">{finding.recommendedAction}</p>
+                        <p className="text-xs text-zinc-500 dark:text-slate-400">
+                          {finding.recommendedAction}
+                        </p>
                       </div>
                     ))
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="border-[#30363D] bg-[#161B22]">
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-                    <BookOpen className="h-5 w-5 text-[#1F6FEB]" />
+                  <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+                    <BookOpen className="h-5 w-5 text-blue-700 dark:text-blue-300" />
                     Authorities
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {analysis.authorities.length === 0 ? (
-                    <p className="text-sm text-[#8B949E]">No authorities returned.</p>
+                    <p className="text-sm text-zinc-500 dark:text-slate-400">
+                      No authorities returned.
+                    </p>
                   ) : (
                     analysis.authorities.map((authority, index) => (
-                      <div key={`${authority.citation}-${index}`} className="rounded border border-[#30363D] bg-[#0D1117] p-3">
-                        <p className="font-mono text-xs text-[#79C0FF]">{authority.citation}</p>
-                        <p className="mt-2 text-xs text-[#8B949E]">{authority.relevance}</p>
+                      <div
+                        key={`${authority.citation}-${index}`}
+                        className="rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-3"
+                      >
+                        <p className="font-mono text-xs text-blue-700 dark:text-blue-200">
+                          {authority.citation}
+                        </p>
+                        <p className="mt-2 text-xs text-zinc-500 dark:text-slate-400">
+                          {authority.relevance}
+                        </p>
                       </div>
                     ))
                   )}
@@ -483,38 +688,53 @@ export default function ProcessDocument() {
 
             <section className="space-y-4">
               {analysis.findings.map((finding, index) => (
-                <Card key={`${finding.issue}-detail-${index}`} className="border-[#30363D] bg-[#161B22]">
+                <Card
+                  key={`${finding.issue}-detail-${index}`}
+                  className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84"
+                >
                   <CardHeader>
-                    <CardTitle className="text-[#E6EDF3]">{finding.issue}</CardTitle>
+                    <CardTitle className="text-zinc-950 dark:text-white">
+                      {finding.issue}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h4 className="mb-2 text-sm font-semibold text-[#E6EDF3]">Evidence</h4>
-                      <blockquote className="border-l-4 border-[#1F6FEB] bg-[#0D1117] p-4 font-mono text-sm text-[#A5D6FF]">
+                      <h4 className="mb-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                        Evidence
+                      </h4>
+                      <blockquote className="border-l-4 border-blue-500 bg-zinc-50 dark:bg-slate-950/55 p-4 font-mono text-sm text-blue-700 dark:text-blue-200">
                         {finding.evidence}
                       </blockquote>
                     </div>
                     <div>
-                      <h4 className="mb-2 text-sm font-semibold text-[#E6EDF3]">Reasoning</h4>
-                      <p className="text-sm leading-6 text-[#C9D1D9]">{finding.reasoning}</p>
+                      <h4 className="mb-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                        Reasoning
+                      </h4>
+                      <p className="text-sm leading-6 text-zinc-700 dark:text-slate-300">
+                        {finding.reasoning}
+                      </p>
                     </div>
                     <div>
-                      <h4 className="mb-2 text-sm font-semibold text-[#E6EDF3]">Recommended Action</h4>
-                      <p className="text-sm leading-6 text-[#C9D1D9]">{finding.recommendedAction}</p>
+                      <h4 className="mb-2 text-sm font-semibold text-zinc-950 dark:text-white">
+                        Recommended Action
+                      </h4>
+                      <p className="text-sm leading-6 text-zinc-700 dark:text-slate-300">
+                        {finding.recommendedAction}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
               ))}
 
-              <Card className="border-[#30363D] bg-[#161B22]">
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-[#E6EDF3]">
-                    <FileText className="h-5 w-5 text-[#1F6FEB]" />
+                  <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+                    <FileText className="h-5 w-5 text-blue-700 dark:text-blue-300" />
                     Motion Scaffold
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="whitespace-pre-wrap rounded border border-[#30363D] bg-[#0D1117] p-4 font-mono text-sm leading-6 text-[#C9D1D9]">
+                  <pre className="whitespace-pre-wrap rounded border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55 p-4 font-mono text-sm leading-6 text-zinc-700 dark:text-slate-300">
                     {analysis.motionScaffold || "No motion scaffold returned."}
                   </pre>
                 </CardContent>
@@ -522,7 +742,7 @@ export default function ProcessDocument() {
             </section>
           </div>
         )}
-      </main>
-    </div>
+      </CommandMain>
+    </CommandSurface>
   );
 }

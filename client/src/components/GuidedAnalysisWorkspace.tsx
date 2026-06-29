@@ -1,35 +1,44 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
+  Activity,
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Brain,
   CalendarDays,
+  ClipboardList,
   CheckCircle2,
   Clock,
   Copy,
   Download,
+  ExternalLink,
+  FileWarning,
   FileText,
   FolderSearch,
   Gauge,
+  GitBranch,
   Layers3,
   ListChecks,
   Loader2,
   Moon,
   Play,
   Scale,
+  Settings,
   ShieldCheck,
-  Sparkles,
   Sun,
   Target,
   Trash2,
+  Wrench,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -337,6 +346,26 @@ function qualityScore(document: CorpusDocument): number {
   return Math.max(0, Math.min(100, score));
 }
 
+function documentBlocker(document: CorpusDocument): string {
+  const warnings = parseStringArray(document.extractionWarnings);
+  if (document.status !== "completed") return `status is ${document.status}`;
+  if (!sourceAnchored(document)) return "missing source hash";
+  if (extractedLength(document) < ANALYSIS_READY_MIN_TEXT_LENGTH) return `only ${extractedLength(document)} extracted characters`;
+  if (qualityScore(document) < ANALYSIS_READY_MIN_QUALITY_SCORE) return `OCR quality ${qualityScore(document)}`;
+  const blockingWarning = warnings.find((warning) => ANALYSIS_BLOCKING_WARNINGS.has(warning));
+  if (blockingWarning) return blockingWarning.replace(/_/g, " ");
+  return "not analysis-ready";
+}
+
+function errorMessage(error: unknown): string {
+  if (!error) return "";
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+}
+
 function inDateScope(document: CorpusDocument, fromDate: string, toDate: string): boolean {
   if (!fromDate && !toDate) return true;
   const createdAt = document.createdAt ? new Date(document.createdAt) : null;
@@ -441,6 +470,175 @@ function StatTile({
       <div className="mt-2 break-words text-xl font-semibold text-zinc-950 dark:text-white sm:text-2xl">{value}</div>
       {detail && <div className="mt-1 break-words text-xs leading-5 text-zinc-500 dark:text-slate-400">{detail}</div>}
     </div>
+  );
+}
+
+function WorkflowNavBar({
+  isEvidenceWorkspace,
+  processPending,
+}: {
+  isEvidenceWorkspace: boolean;
+  processPending: boolean;
+}) {
+  const siblingHref = isEvidenceWorkspace ? "/sector/arsenal" : "/sector/evidence";
+  const siblingLabel = isEvidenceWorkspace ? "Legal War Room" : "Evidence Review";
+  const navItems = [
+    { href: "#status", label: "Status", icon: Activity },
+    { href: "#plan", label: "Plan", icon: Target },
+    { href: "#scope", label: "Scope", icon: Layers3 },
+    { href: "#agents", label: "Agents", icon: Brain },
+    { href: "#results", label: "Results", icon: Scale },
+  ];
+
+  return (
+    <nav className="sticky top-[57px] z-10 -mx-3 border-y border-zinc-200 bg-[#fbf8f1]/95 px-3 py-2 backdrop-blur dark:border-white/10 dark:bg-slate-950/90 sm:-mx-4 sm:px-4">
+      <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {navItems.map(({ href, label, icon: Icon }) => (
+          <a
+            key={href}
+            href={href}
+            className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </a>
+        ))}
+        <Link href={siblingHref}>
+          <Button variant="outline" size="sm" className="min-h-9 shrink-0 gap-2 border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
+            <GitBranch className="h-4 w-4" />
+            {siblingLabel}
+          </Button>
+        </Link>
+        <Link href="/reports">
+          <Button variant="outline" size="sm" className="min-h-9 shrink-0 gap-2 border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
+            <ClipboardList className="h-4 w-4" />
+            Reports
+          </Button>
+        </Link>
+        {processPending && (
+          <Badge className="min-h-9 shrink-0 gap-2 bg-amber-600 px-3 text-white">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Running
+          </Badge>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function LoudStatusPanel({
+  issues,
+  readyPercent,
+  readyDocuments,
+  blockedDocuments,
+  selectedDocumentIds,
+  matchingDocumentCount,
+  runDisabledReason,
+  setScope,
+  setSelectedDocumentIds,
+}: {
+  issues: Array<{ id: string; title: string; detail: string; severity: "critical" | "warning" | "info"; actionHref?: string; actionLabel?: string }>;
+  readyPercent: number;
+  readyDocuments: CorpusDocument[];
+  blockedDocuments: CorpusDocument[];
+  selectedDocumentIds: number[];
+  matchingDocumentCount: number;
+  runDisabledReason: string | null;
+  setScope: (scope: AnalysisScope) => void;
+  setSelectedDocumentIds: (ids: number[]) => void;
+}) {
+  const critical = issues.filter((issue) => issue.severity === "critical");
+  const warnings = issues.filter((issue) => issue.severity === "warning");
+  const info = issues.filter((issue) => issue.severity === "info");
+
+  return (
+    <section id="status" className="scroll-mt-28 space-y-3">
+      <Card className={cn(
+        "min-w-0 overflow-hidden border-2 shadow-sm",
+        critical.length > 0
+          ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+          : warnings.length > 0
+            ? "border-amber-500 bg-amber-50 dark:bg-amber-950/25"
+            : "border-emerald-500/40 bg-white/85 dark:bg-emerald-950/10"
+      )}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
+                {critical.length > 0 ? <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-300" /> : warnings.length > 0 ? <FileWarning className="h-5 w-5 text-amber-600 dark:text-amber-300" /> : <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />}
+                {critical.length > 0 ? "Blocked Loudly" : warnings.length > 0 ? "Needs Attention" : "Ready To Work"}
+              </CardTitle>
+              <CardDescription className="mt-1 text-zinc-600 dark:text-slate-300">
+                {runDisabledReason || `${matchingDocumentCount} ready record${matchingDocumentCount === 1 ? "" : "s"} available for this run.`}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/sector/corpus">
+                <Button variant="outline" size="sm" className="gap-2 border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
+                  <Wrench className="h-4 w-4" />
+                  Fix Corpus
+                </Button>
+              </Link>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={readyDocuments.length === 0}
+                onClick={() => {
+                  setScope("file");
+                  setSelectedDocumentIds(readyDocuments.map((document) => document.id));
+                }}
+                className="gap-2 border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5"
+              >
+                <FileText className="h-4 w-4" />
+                Use Ready Files
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <StatTile icon={CheckCircle2} label="Ready" value={readyDocuments.length} detail="can be analyzed" tone="text-emerald-600 dark:text-emerald-300" />
+            <StatTile icon={FileWarning} label="Blocked" value={blockedDocuments.length} detail="fix or exclude" tone="text-red-600 dark:text-red-300" />
+            <StatTile icon={Layers3} label="Selected" value={selectedDocumentIds.length} detail="file-scope picks" tone="text-blue-600 dark:text-blue-300" />
+            <StatTile icon={Gauge} label="Readiness" value={`${readyPercent}%`} detail="Corpus usable" tone={readyPercent === 100 ? "text-emerald-600 dark:text-emerald-300" : "text-amber-600 dark:text-amber-300"} />
+          </div>
+          <Progress value={readyPercent} className="h-2 bg-zinc-200 dark:bg-white/10" />
+
+          {issues.length > 0 && (
+            <div className="grid gap-3">
+              {[...critical, ...warnings, ...info].map((issue) => (
+                <Alert
+                  key={issue.id}
+                  className={cn(
+                    "border-2",
+                    issue.severity === "critical"
+                      ? "border-red-500 bg-red-100 text-red-950 dark:bg-red-950/40 dark:text-red-100"
+                      : issue.severity === "warning"
+                        ? "border-amber-500 bg-amber-100 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100"
+                        : "border-blue-500/40 bg-blue-50 text-blue-950 dark:bg-blue-950/25 dark:text-blue-100"
+                  )}
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle className="line-clamp-none">{issue.title}</AlertTitle>
+                  <AlertDescription className="text-current/85">
+                    <p>{issue.detail}</p>
+                    {issue.actionHref && (
+                      <Link href={issue.actionHref}>
+                        <Button size="sm" variant="outline" className="mt-2 gap-2 border-current/30 bg-white/60 text-current hover:bg-white/80 dark:bg-white/10 dark:hover:bg-white/15">
+                          {issue.actionLabel || "Open"}
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
@@ -819,6 +1017,98 @@ export function GuidedAnalysisWorkspace({
   const topLiabilityVectors = rankCounts(savedFindings.map((finding) => finding.liabilityVector || ""));
   const topMissingRecords = rankCounts(savedFindings.flatMap((finding) => finding.missingRecords ?? []));
   const highRiskFindings = visibleFindings.filter((finding) => finding.leverageScore >= 80 || finding.severity === "critical").slice(0, 6);
+  const failedAgentResults = processScope.data?.results.filter((result) => result.status === "failed") ?? [];
+  const readyPercent = documents.length === 0 ? 0 : Math.round((readyDocuments.length / documents.length) * 100);
+
+  const runDisabledReason =
+    documentsQuery.isLoading || savedRunsQuery.isLoading || savedFindingsQuery.isLoading
+      ? "Loading backend state..."
+      : documents.length === 0
+        ? "No Corpus records exist yet. Upload something before running agents."
+        : readyDocuments.length === 0
+          ? "No files are analysis-ready. Fix extraction first."
+          : scope === "all" && blockedDocuments.length > 0
+            ? "Whole-case analysis is blocked until every Corpus file is processed. Use Selected files if you want to run only ready records."
+            : scope === "file" && selectedDocumentIds.length === 0
+              ? "Selected-files scope needs at least one ready file checked."
+              : scope === "time" && !fromDate && !toDate
+                ? "Case-era scope needs a start date, end date, or both."
+                : scope === "time" && timeScopedBlockedDocuments.length > 0
+                  ? "This date range includes unprocessed files. Narrow it or fix Corpus extraction."
+                  : scope === "time" && timeScopedReadyDocuments.length === 0
+                    ? "No ready files match that date range."
+                    : isAdmin && catalogQuery.error
+                      ? "Admin agent catalog failed to load. Presets can still show, but custom agent selection is broken."
+                      : isAdmin && selectedAgentIds.length === 0
+                        ? "Choose a workflow or at least one agent."
+                        : null;
+
+  const loudIssues = [
+    documentsQuery.error && {
+      id: "documents-query",
+      title: "Corpus API is not answering cleanly",
+      detail: errorMessage(documentsQuery.error),
+      severity: "critical" as const,
+      actionHref: "/sector/corpus",
+      actionLabel: "Open Corpus",
+    },
+    savedRunsQuery.error && {
+      id: "saved-runs-query",
+      title: "Saved run history failed to load",
+      detail: errorMessage(savedRunsQuery.error),
+      severity: "warning" as const,
+      actionHref: "/settings",
+      actionLabel: "Check Settings",
+    },
+    savedFindingsQuery.error && {
+      id: "saved-findings-query",
+      title: "Structured findings failed to load",
+      detail: errorMessage(savedFindingsQuery.error),
+      severity: "warning" as const,
+      actionHref: "/reports",
+      actionLabel: "Open Reports",
+    },
+    isAdmin && catalogQuery.error && {
+      id: "agent-catalog-query",
+      title: "Admin agent catalog failed",
+      detail: errorMessage(catalogQuery.error),
+      severity: "warning" as const,
+      actionHref: "/settings",
+      actionLabel: "Check Settings",
+    },
+    processScope.error && {
+      id: "process-scope-error",
+      title: "Latest analysis run failed",
+      detail: errorMessage(processScope.error),
+      severity: "critical" as const,
+      actionHref: "/sector/corpus",
+      actionLabel: "Check Corpus",
+    },
+    blockedDocuments.length > 0 && {
+      id: "blocked-documents",
+      title: `${blockedDocuments.length} Corpus file${blockedDocuments.length === 1 ? "" : "s"} cannot be used by agents`,
+      detail: blockedDocuments.slice(0, 4).map((document) => `${document.fileName}: ${documentBlocker(document)}`).join("; "),
+      severity: scope === "all" ? "critical" as const : "warning" as const,
+      actionHref: "/sector/corpus",
+      actionLabel: "Fix Files",
+    },
+    failedAgentResults.length > 0 && {
+      id: "failed-agent-results",
+      title: `${failedAgentResults.length} agent${failedAgentResults.length === 1 ? "" : "s"} failed in the latest run`,
+      detail: failedAgentResults.slice(0, 3).map((result) => `${result.agentName}: ${"error" in result ? result.error : "unknown failure"}`).join("; "),
+      severity: "critical" as const,
+      actionHref: "/settings",
+      actionLabel: "Check API/Usage",
+    },
+    needsProofCount > 0 && {
+      id: "needs-proof-findings",
+      title: `${needsProofCount} finding${needsProofCount === 1 ? "" : "s"} are not court-ready`,
+      detail: "Pending, blocked, or needs-more-proof findings should stay out of reports unless you intentionally override them.",
+      severity: "info" as const,
+      actionHref: "/reports",
+      actionLabel: "Review Reports",
+    },
+  ].filter(Boolean) as Array<{ id: string; title: string; detail: string; severity: "critical" | "warning" | "info"; actionHref?: string; actionLabel?: string }>;
 
   const resolveAgentIds = (agentIds: string[]) => availableAgentIds.size > 0 ? agentIds.filter((agentId) => availableAgentIds.has(agentId)) : agentIds;
   const setAgentSelection = (agentIds: string[]) => setSelectedAgentIds(resolveAgentIds(agentIds));
@@ -881,6 +1171,39 @@ export function GuidedAnalysisWorkspace({
           </Link>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {isAdmin && <Badge className="border-0 bg-emerald-600 text-white">Admin</Badge>}
+            <Link href="/sector/corpus">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden gap-2 border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10 sm:inline-flex"
+              >
+                <FolderSearch className="h-4 w-4" />
+                Corpus
+              </Button>
+            </Link>
+            <Link href="/reports">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden gap-2 border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10 sm:inline-flex"
+              >
+                <ClipboardList className="h-4 w-4" />
+                Reports
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden gap-2 border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10 md:inline-flex"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
+            </Link>
             <Button
               type="button"
               variant="outline"
@@ -895,7 +1218,24 @@ export function GuidedAnalysisWorkspace({
         </div>
       </header>
 
+      <WorkflowNavBar
+        isEvidenceWorkspace={isEvidenceWorkspace}
+        processPending={processScope.isPending}
+      />
+
       <main className="mx-auto w-full max-w-7xl space-y-5 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6">
+        <LoudStatusPanel
+          issues={loudIssues}
+          readyPercent={readyPercent}
+          readyDocuments={readyDocuments}
+          blockedDocuments={blockedDocuments}
+          selectedDocumentIds={selectedDocumentIds}
+          matchingDocumentCount={matchingDocumentCount}
+          runDisabledReason={runDisabledReason}
+          setScope={setScope}
+          setSelectedDocumentIds={setSelectedDocumentIds}
+        />
+
         <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)] lg:items-stretch">
           <div className="min-w-0 rounded-md border border-zinc-200 bg-white/70 p-4 shadow-sm dark:border-white/10 dark:bg-slate-950/70 sm:p-5">
             <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", styles.accentText)}>{eyebrow}</p>
@@ -920,7 +1260,7 @@ export function GuidedAnalysisWorkspace({
 
         <section className="grid min-w-0 gap-5 lg:grid-cols-[minmax(18rem,0.86fr)_minmax(0,1.14fr)] lg:gap-6">
           <div className="min-w-0 space-y-5 sm:space-y-6">
-            <Card className="min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
+            <Card id="plan" className="scroll-mt-28 min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
                   <Target className={cn("h-5 w-5", styles.accentText)} />
@@ -935,7 +1275,7 @@ export function GuidedAnalysisWorkspace({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {recommendations.slice(0, 6).map((recommendation) => {
+                {recommendations.map((recommendation) => {
                   const usableIds = resolveAgentIds(recommendation.agentIds);
                   const active = usableIds.length > 0 && usableIds.every((agentId) => selectedAgentIds.includes(agentId)) && selectedAgentIds.length === usableIds.length;
                   return (
@@ -959,7 +1299,7 @@ export function GuidedAnalysisWorkspace({
               </CardContent>
             </Card>
 
-            <Card className="min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
+            <Card id="scope" className="scroll-mt-28 min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
                   <Layers3 className={cn("h-5 w-5", styles.accentText)} />
@@ -1045,7 +1385,7 @@ export function GuidedAnalysisWorkspace({
             </Card>
 
             {isAdmin && (
-              <Card className="min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
+              <Card id="agents" className="scroll-mt-28 min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-zinc-950 dark:text-white">
                     <Brain className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
@@ -1134,7 +1474,7 @@ export function GuidedAnalysisWorkspace({
               currentRun={processScope.data}
             />
 
-            <Card className="min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
+            <Card id="results" className="scroll-mt-28 min-w-0 overflow-hidden border-zinc-200 bg-white/80 shadow-sm dark:border-white/10 dark:bg-slate-950/75">
               <CardHeader className="pb-3">
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">

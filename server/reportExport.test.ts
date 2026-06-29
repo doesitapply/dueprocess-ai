@@ -16,10 +16,39 @@ const sampleReport: StoredReportForExport = {
     "## Strongest Record Facts",
     "This is source-bound text.",
     "",
+    "> Exact quote support belongs here.",
+    "",
     "### Source Appendix",
     "- File A.pdf: quoted support",
   ].join("\n"),
-  metadata: JSON.stringify({ statistics: { documents: 1, structuredFindings: 2 } }),
+  metadata: JSON.stringify({
+    metadata: {
+      title: "Sample Court Packet",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      generatedBy: "Test User",
+      scope: "files",
+      template: "court_packet",
+    },
+    documents: [
+      {
+        fileName: "File A.pdf",
+        status: "completed",
+        analysisReady: true,
+        documentHash: "a".repeat(64),
+        extractionQualityScore: 97,
+      },
+    ],
+    findings: [
+      {
+        title: "Finding A",
+        confidence: 96,
+        leverageScore: 91,
+        qcStatus: "approved",
+        includedInReports: true,
+      },
+    ],
+    statistics: { documents: 1, readyDocuments: 1, structuredFindings: 1 },
+  }),
 };
 
 describe("report export", () => {
@@ -35,10 +64,29 @@ describe("report export", () => {
   });
 
   it("renders print-ready HTML from markdown", () => {
-    const html = markdownToReportHtml(sampleReport.content, sampleReport.title);
+    const html = markdownToReportHtml(
+      sampleReport.content,
+      sampleReport.title,
+      JSON.parse(sampleReport.metadata ?? "{}")
+    );
 
     expect(html).toContain("<h1>Sample Court Packet</h1>");
-    expect(html).toContain("<h2>Strongest Record Facts</h2>");
+    expect(html).toContain(">Strongest Record Facts</h2>");
+    expect(html).toContain("Export quality gate");
+    expect(html).toContain("Source Control");
+    expect(html).toContain("File A.pdf");
+  });
+
+  it("exports JSON with canonical markdown and export quality metadata", async () => {
+    const artifact = await buildReportExportArtifact(sampleReport, "json");
+    const parsed = JSON.parse(artifact.content) as {
+      exportQuality?: { sourceControlIncluded?: boolean };
+      markdown?: string;
+    };
+
+    expect(artifact.encoding).toBe("utf8");
+    expect(parsed.markdown).toContain("Exact quote support");
+    expect(parsed.exportQuality?.sourceControlIncluded).toBe(true);
   });
 
   it("exports PDF as base64 PDF bytes", async () => {
@@ -48,6 +96,7 @@ describe("report export", () => {
     expect(artifact.encoding).toBe("base64");
     expect(artifact.mimeType).toBe("application/pdf");
     expect(bytes.subarray(0, 4).toString("utf8")).toBe("%PDF");
+    expect(bytes.length).toBeGreaterThan(2500);
   });
 
   it("exports DOCX as base64 zip bytes", async () => {
@@ -55,7 +104,10 @@ describe("report export", () => {
     const bytes = Buffer.from(artifact.content, "base64");
 
     expect(artifact.encoding).toBe("base64");
-    expect(artifact.mimeType).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    expect(artifact.mimeType).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
     expect(bytes.subarray(0, 2).toString("utf8")).toBe("PK");
+    expect(bytes.length).toBeGreaterThan(5000);
   });
 });

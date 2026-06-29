@@ -37,6 +37,7 @@ import {
   isDocumentReadyForAnalysis,
   withSourceAnchor,
 } from "./extractionReadiness";
+import { buildMasterRecords, consolidateDocumentsForAnalysis } from "./recordConsolidation";
 
 function assertDocumentReadyForAnalysis(document: Parameters<typeof isDocumentReadyForAnalysis>[0]) {
   if (!isDocumentReadyForAnalysis(document)) {
@@ -491,7 +492,14 @@ export const appRouter = router({
         if (selectedDocuments.length === 0) {
           throw new Error("No matching documents found in your Corpus.");
         }
-        selectedDocuments.forEach(assertDocumentReadyForAnalysis);
+        const consolidatedSelection = consolidateDocumentsForAnalysis(selectedDocuments);
+        if (consolidatedSelection.blockingDocuments.length > 0) {
+          assertDocumentReadyForAnalysis(consolidatedSelection.blockingDocuments[0]);
+        }
+        const analysisDocuments = consolidatedSelection.documents;
+        if (analysisDocuments.length === 0) {
+          throw new Error("No analysis-ready master records found in your Corpus.");
+        }
 
         const hasCustomAgentSelection = Boolean(input.agentIds && input.agentIds.length > 0);
         const isConfiguredOwner =
@@ -509,13 +517,13 @@ export const appRouter = router({
         }
 
         const contextLimit = 60000;
-        const perDocumentLimit = Math.max(2500, Math.floor(contextLimit / selectedDocuments.length));
+        const perDocumentLimit = Math.max(2500, Math.floor(contextLimit / analysisDocuments.length));
         const formatDate = (value: Date | string): string => {
           const date = value instanceof Date ? value : new Date(value);
           return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
         };
 
-        const caseRecord = selectedDocuments
+        const caseRecord = analysisDocuments
           .map((document, index) => {
             const text = document.extractedText || document.summary || "[No extracted text available]";
             return [
@@ -529,7 +537,7 @@ export const appRouter = router({
           .join("\n\n---\n\n")
           .slice(0, contextLimit);
 
-        const anchorDocument = selectedDocuments[0];
+        const anchorDocument = analysisDocuments[0];
         const scopeLabel =
           input.scope === "all"
             ? "the entire case corpus"
@@ -599,7 +607,7 @@ export const appRouter = router({
 
             const messageContent = response.choices[0]?.message?.content;
             const output = typeof messageContent === "string" ? messageContent : JSON.stringify(messageContent) || "No response generated";
-            const structured = parseStructuredAgentOutput(agent, output, selectedDocuments);
+            const structured = parseStructuredAgentOutput(agent, output, analysisDocuments);
             const processingTime = Date.now() - startTime;
 
             const savedOutput = await createAgentOutput({
@@ -613,7 +621,7 @@ export const appRouter = router({
 
             const savedFindings = [];
             for (const finding of structured.findings) {
-              const gated = applyRiskBasedQcGate(verifyFindingQuotes(finding, selectedDocuments));
+              const gated = applyRiskBasedQcGate(verifyFindingQuotes(finding, analysisDocuments));
               let finalFinding = gated;
               const savedFinding = await createAgentFinding({
                 runId: run.id,
@@ -640,7 +648,7 @@ export const appRouter = router({
 
               if (gated.qcStatus === "pending") {
                 try {
-                  const audit = normalizeQcAuditForReportUse(gated, await auditFindingWithLLM(gated, selectedDocuments));
+                  const audit = normalizeQcAuditForReportUse(gated, await auditFindingWithLLM(gated, analysisDocuments));
                   await createAgentFindingAudit({
                     findingId: savedFinding.id,
                     runId: run.id,
@@ -741,8 +749,11 @@ export const appRouter = router({
           runId: run.id,
           sector: input.sector,
           scope: input.scope,
-          documentCount: selectedDocuments.length,
-          documents: selectedDocuments.map((document) => ({
+          documentCount: analysisDocuments.length,
+          originalDocumentCount: selectedDocuments.length,
+          skippedDuplicateIds: consolidatedSelection.skippedDuplicateIds,
+          masterRecordCount: consolidatedSelection.masterRecords.length,
+          documents: analysisDocuments.map((document) => ({
             id: document.id,
             fileName: document.fileName,
             createdAt: formatDate(document.createdAt),
@@ -847,6 +858,12 @@ export const appRouter = router({
     // Get user's documents
     list: protectedProcedure.query(async ({ ctx }) => {
       return getUserDocuments(ctx.user.id);
+    }),
+
+    // Build a consolidated master-record map from exact duplicates and review candidates.
+    masterRecords: protectedProcedure.query(async ({ ctx }) => {
+      const userDocuments = await getUserDocuments(ctx.user.id);
+      return buildMasterRecords(userDocuments);
     }),
 
     // Get document by ID with outputs
