@@ -1,5 +1,7 @@
 # DueProcess AI - Pricing Structure Analysis
 
+> Archived pricing analysis. This file references older per-agent and per-sector packaging. The current implementation source of truth is `server/products.ts`.
+
 ## Current State
 
 ### Agents (16 Total)

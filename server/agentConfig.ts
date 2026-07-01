@@ -1,6 +1,6 @@
 /**
  * Agent Division System Configuration
- * 
+ *
  * This file defines all specialized legal agents, their divisions, capabilities,
  * and system prompts with citation requirements and reasoning explanations.
  */
@@ -18,7 +18,8 @@ export interface AgentConfig {
 export const AGENT_DIVISIONS = {
   research: {
     name: "Research Division",
-    description: "Deep legal research across case law, statutes, and professional rules",
+    description:
+      "Deep legal research across case law, statutes, and professional rules",
     icon: "🔍",
   },
   analysis: {
@@ -33,12 +34,14 @@ export const AGENT_DIVISIONS = {
   },
   evidence: {
     name: "Evidence Division",
-    description: "Pattern recognition, timeline construction, and contradiction detection",
+    description:
+      "Pattern recognition, timeline construction, and contradiction detection",
     icon: "📊",
   },
   offensive: {
     name: "Offensive Division",
-    description: "Motion drafting, complaint construction, and viral content generation",
+    description:
+      "Motion drafting, complaint construction, and viral content generation",
     icon: "💣",
   },
 };
@@ -66,9 +69,14 @@ export const AGENTS: AgentConfig[] = [
     id: "canon_hunter",
     name: "Canon Hunter",
     division: "research",
-    description: "Digs through judicial ethics codes, lawyer professional conduct rules, and disciplinary standards",
+    description:
+      "Digs through judicial ethics codes, lawyer professional conduct rules, and disciplinary standards",
     darkHumorTagline: "They wrote the rules. We memorized them.",
-    capabilities: ["ethics_codes", "professional_conduct", "disciplinary_rules"],
+    capabilities: [
+      "ethics_codes",
+      "professional_conduct",
+      "disciplinary_rules",
+    ],
     systemPrompt: `You are Canon Hunter, a specialized legal research agent focused on judicial ethics and professional conduct rules.
 
 YOUR MISSION:
@@ -103,7 +111,8 @@ Your job is to identify ethics pressure points without overstating litigation im
     id: "precedent_miner",
     name: "Precedent Miner",
     division: "research",
-    description: "Searches Justia, Westlaw, and CourtListener for relevant case law and precedents",
+    description:
+      "Searches Justia, Westlaw, and CourtListener for relevant case law and precedents",
     darkHumorTagline: "Stare decisis. Latin for 'your receipts are permanent.'",
     capabilities: ["case_law_search", "precedent_analysis", "circuit_splits"],
     systemPrompt: `You are Precedent Miner, a case law research specialist.
@@ -181,7 +190,8 @@ Remember: Statutes are your foundation. Build on them.`,
     id: "constitutional_analyst",
     name: "Constitutional Analyst",
     division: "analysis",
-    description: "Identifies violations of constitutional rights (1st, 4th, 5th, 6th, 14th Amendments)",
+    description:
+      "Identifies violations of constitutional rights (1st, 4th, 5th, 6th, 14th Amendments)",
     darkHumorTagline: "The Constitution is not a suggestion. It's a receipt.",
     capabilities: ["constitutional_law", "bill_of_rights", "due_process"],
     systemPrompt: `You are Constitutional Analyst, a constitutional law specialist.
@@ -229,9 +239,15 @@ Remember: Constitutional rights are supreme. Enforce them.`,
     id: "criminal_law_specialist",
     name: "Criminal Law Specialist",
     division: "analysis",
-    description: "Analyzes Brady violations, prosecutorial misconduct, and criminal procedure violations",
-    darkHumorTagline: "Brady violations. Because hiding evidence is a felony, not a strategy.",
-    capabilities: ["brady_violations", "prosecutorial_misconduct", "criminal_procedure"],
+    description:
+      "Analyzes Brady violations, prosecutorial misconduct, and criminal procedure violations",
+    darkHumorTagline:
+      "Brady violations. Because hiding evidence is a felony, not a strategy.",
+    capabilities: [
+      "brady_violations",
+      "prosecutorial_misconduct",
+      "criminal_procedure",
+    ],
     systemPrompt: `You are Criminal Law Specialist, focused on prosecutorial misconduct and criminal procedure violations.
 
 YOUR MISSION:
@@ -277,8 +293,10 @@ Remember: Prosecutors aren't above the law. Prove it.`,
     id: "civil_rights_expert",
     name: "Civil Rights Expert",
     division: "analysis",
-    description: "§1983 claims, clearly established law, Monell, and civil-rights relief pathways",
-    darkHumorTagline: "Qualified immunity is a barrier. Build the record around it.",
+    description:
+      "§1983 claims, clearly established law, Monell, and civil-rights relief pathways",
+    darkHumorTagline:
+      "Qualified immunity is a barrier. Build the record around it.",
     capabilities: ["section_1983", "qualified_immunity", "civil_rights"],
     systemPrompt: `You are Civil Rights Expert, specializing in § 1983 litigation and qualified immunity.
 
@@ -353,14 +371,92 @@ TONE: "When the trial court fails, we go higher. Much higher."
 Remember: Trial courts make mistakes. Appellate courts fix them.`,
   },
 
+  {
+    id: "mandamus_writ_architect",
+    name: "Mandamus Writ Architect",
+    division: "analysis",
+    description:
+      "Tests mandamus viability, maps missing writ records, and builds petition-ready relief pathways",
+    darkHumorTagline: "Make the court do the thing the law already required.",
+    capabilities: [
+      "mandamus",
+      "extraordinary_writs",
+      "relief_pathways",
+      "petition_scaffolding",
+    ],
+    systemPrompt: `You are Mandamus Writ Architect, a Nevada-aware extraordinary-writ specialist.
+
+YOUR MISSION:
+Decide whether the record supports a mandamus, prohibition, habeas, appeal, recusal, or supervisory-review route. Your job is not to call every bad ruling a writ. Your job is to identify the narrow places where a court or officer had a legal duty, refused or failed to act, or exercised discretion in a way that may qualify as manifest abuse, arbitrary/capricious action, or a failure to perform a duty.
+
+NEVADA MANDAMUS BASELINE:
+- NRS 34.160: mandamus compels performance of an act that the law especially enjoins as a duty, or admission to a right or office from which a party is unlawfully precluded.
+- NRS 34.170: mandamus requires no plain, speedy, and adequate remedy in the ordinary course of law and is sought by a beneficially interested party.
+- Treat mandamus as extraordinary relief, not a substitute for ordinary appeal unless appeal is inadequate for the specific harm.
+- Separate mandamus from prohibition: mandamus compels a required act; prohibition restrains a tribunal acting without or in excess of jurisdiction.
+
+NEVADA WRIT CONTEXT:
+- Use Nevada writ statutes as the baseline, but do not hard-code one case number or one user's facts unless the selected source records contain them.
+- In a Nevada criminal record, pay special attention to unresolved motions, missing written findings, competency procedure duties, refused filings, transport/detention orders, bail findings, docket gaps, and missing hearing transcripts.
+- A mandamus route is strongest when the requested command is narrow: rule on a pending matter, produce/settle the record, make required findings, accept a filing, hold a required hearing, or perform a specific ministerial/legal duty.
+- A mandamus route is weakest when the user is really asking the reviewing court to reweigh disputed facts, decide ordinary merits, or correct an error that can be fixed by appeal.
+
+MANDAMUS VIABILITY GATES:
+1. Clear duty or clear legal right: What exact act was legally required?
+2. Beneficial interest / standing: Why is the requesting party directly affected?
+3. No plain, speedy, adequate remedy: Why are appeal, post-conviction relief, ordinary motion practice, or later review inadequate?
+4. Record support: Which filed document, order, minute entry, transcript, notice, docket event, or communication proves the duty/refusal/delay?
+5. Discretion barrier: If the act is discretionary, state whether the argument is abuse of discretion, arbitrary/capricious action, refusal to exercise discretion, or likely not mandamus-worthy.
+6. Urgency and prejudice: What harm occurs if the writ is not considered now?
+7. Requested relief: State the precise command sought, without asking the reviewing court to decide unsupported facts.
+
+PETITION SCAFFOLD:
+- Issue presented: one narrow sentence.
+- Relief requested: the exact act to compel or restrain.
+- Writ basis: NRS 34.160 / NRS 34.170 and the ordinary-remedy problem.
+- Record appendix needs: identify each order, docket entry, transcript, motion, notice, or exhibit required to support the writ.
+- Standard-of-review risk: ordinary appeal adequate, discretionary act, factual dispute, mootness, waiver, or inadequate appendix.
+- Draft command language: "Petitioner asks this Court to direct [court/officer] to [specific act], or alternatively to require written findings / produce the record / rule on the pending matter."
+
+OUTPUT RULES:
+- For strong writ issues, create findings with remedyPath "mandamus" or "mandamus/prohibition" and clear next actions.
+- Every mandamus finding must state one route label in nextAction: FILE_WRIT, DEMAND_RECORDS_FIRST, PRESERVE_FOR_APPEAL, or NOT_MANDAMUS.
+- For missing proof, use missing_critical or suspicious_absence, not record_supported.
+- Convert gaps into exact record demands: written order, minute order, hearing transcript, docket entry, filing receipt, proof of service, evaluator report, certification, transport log, jail log, clerk rejection notice, counsel-withdrawal record, Faretta colloquy transcript, competency hearing transcript, bail basis, or preservation filing.
+- Label weak routes honestly when appeal, habeas exhaustion, pending motion practice, or ordinary review may be adequate.
+- Do not claim mandamus pierces judicial immunity for damages. Mandamus is a non-damages command/supervisory relief pathway.
+- Do not accuse a judge, prosecutor, clerk, evaluator, or officer of misconduct unless the record supports the factual predicate. Missing records are demands, not proof.
+
+NEVADA CRIMINAL-CASE PRESSURE POINTS:
+- Failure or refusal to rule on pending motions.
+- Failure to provide required written findings or procedural determinations.
+- Competency procedure duties, evaluator conflict handling, certification/restoration procedure, and hearing requirements.
+- Closed-loop pro se/counsel/Faretta problems where filings are rejected because counsel exists but counsel breakdown or self-representation is unresolved.
+- Detention, no-bail, transport, or safety findings that appear to rely on records not produced.
+- Docket or minute-order gaps that make appellate preservation impossible.
+
+COURT-SAFE PHRASES:
+- "The record supports a demand for the missing order/transcript/log before this can be framed as a proven violation."
+- "This appears mandamus-relevant only if the omitted act was legally required rather than discretionary."
+- "The safer writ theory is to compel a ruling or record production, not to ask the reviewing court to decide the disputed merits."
+- "If ordinary appeal is adequate, this route should be preserved as an appellate issue rather than filed as emergency mandamus."
+
+TONE: restrained, surgical, and petition-ready.`,
+  },
+
   // ========== TACTICAL DIVISION ==========
   {
     id: "immunity_piercer",
     name: "Immunity Exposure Analyst",
     division: "tactical",
-    description: "Maps immunity barriers, actor categories, damages limits, and safer relief pathways",
+    description:
+      "Maps immunity barriers, actor categories, damages limits, and safer relief pathways",
     darkHumorTagline: "Less fireworks. More court-safe pathways.",
-    capabilities: ["immunity_analysis", "relief_pathways", "actor_function_analysis"],
+    capabilities: [
+      "immunity_analysis",
+      "relief_pathways",
+      "actor_function_analysis",
+    ],
     systemPrompt: `You are Immunity Exposure Analyst, a court-safe federal civil-rights immunity and relief-pathway specialist.
 
 YOUR MISSION:
@@ -424,8 +520,10 @@ Remember: The strongest output is not "we pierced immunity." The strongest outpu
     id: "abstention_destroyer",
     name: "Abstention Destroyer",
     division: "tactical",
-    description: "Shows why Younger, Rooker-Feldman, and Colorado River abstention don't apply",
-    darkHumorTagline: "Abstention is a suggestion. Federal jurisdiction is the law.",
+    description:
+      "Shows why Younger, Rooker-Feldman, and Colorado River abstention don't apply",
+    darkHumorTagline:
+      "Abstention is a suggestion. Federal jurisdiction is the law.",
     capabilities: ["abstention_doctrine", "jurisdiction", "federal_courts"],
     systemPrompt: `You are Abstention Destroyer, the specialist in defeating abstention doctrines.
 
@@ -473,9 +571,15 @@ Remember: Federal courts exist to protect federal rights. Make them act.`,
     id: "discovery_tactician",
     name: "Discovery Tactician",
     division: "tactical",
-    description: "What to request in discovery, when, and why they can't hide it",
-    darkHumorTagline: "They can claim immunity. They can't claim attorney-client privilege on corruption.",
-    capabilities: ["discovery_strategy", "interrogatories", "document_requests"],
+    description:
+      "What to request in discovery, when, and why they can't hide it",
+    darkHumorTagline:
+      "They can claim immunity. They can't claim attorney-client privilege on corruption.",
+    capabilities: [
+      "discovery_strategy",
+      "interrogatories",
+      "document_requests",
+    ],
     systemPrompt: `You are Discovery Tactician, the specialist in extracting evidence through discovery.
 
 YOUR MISSION:
@@ -529,7 +633,8 @@ Remember: Discovery is your weapon. Use it ruthlessly.`,
     name: "Pattern Recognition Engine",
     division: "evidence",
     description: "Finds systemic corruption across multiple cases and actors",
-    darkHumorTagline: "One case is an error. Ten cases is a pattern. A hundred cases is a RICO.",
+    darkHumorTagline:
+      "One case is an error. Ten cases is a pattern. A hundred cases is a RICO.",
     capabilities: ["pattern_analysis", "systemic_corruption", "data_analysis"],
     systemPrompt: `You are Pattern Recognition Engine, the specialist in identifying systemic corruption.
 
@@ -567,8 +672,10 @@ Remember: Patterns are evidence. Document them.`,
     id: "timeline_constructor",
     name: "Timeline Constructor",
     division: "evidence",
-    description: "Builds chronological evidence chains showing cause and effect",
-    darkHumorTagline: "Time doesn't lie. Neither does a well-constructed timeline.",
+    description:
+      "Builds chronological evidence chains showing cause and effect",
+    darkHumorTagline:
+      "Time doesn't lie. Neither does a well-constructed timeline.",
     capabilities: ["timeline_analysis", "chronology", "causation"],
     systemPrompt: `You are Timeline Constructor, the specialist in building chronological evidence chains.
 
@@ -617,7 +724,8 @@ Remember: Chronology is clarity. Build it meticulously.`,
     id: "contradiction_detector",
     name: "Contradiction Detector",
     division: "evidence",
-    description: "Finds inconsistencies in official statements, testimony, and documents",
+    description:
+      "Finds inconsistencies in official statements, testimony, and documents",
     darkHumorTagline: "They said what? Let's check the transcript.",
     capabilities: ["contradiction_analysis", "impeachment", "credibility"],
     systemPrompt: `You are Contradiction Detector, the specialist in finding inconsistencies.
@@ -749,7 +857,8 @@ Remember: Complaints are your opening salvo. Make it count.`,
     id: "viral_content_generator",
     name: "Viral Content Generator",
     division: "offensive",
-    description: "Creates shareable content that exposes corruption (Justice Jester evolved)",
+    description:
+      "Creates shareable content that exposes corruption (Justice Jester evolved)",
     darkHumorTagline: "Immunity protects you from lawsuits. Not from TikTok.",
     capabilities: ["viral_content", "social_media", "public_pressure"],
     systemPrompt: `You are Viral Content Generator (Justice Jester 2.0), the specialist in turning legal corruption into shareable content.
@@ -788,9 +897,16 @@ Remember: Public pressure works. Make it viral.`,
     id: "monell_pattern_mapper",
     name: "Monell Pattern Mapper",
     division: "tactical",
-    description: "Maps municipal liability through policy, custom, failure to train, ratification, deliberate indifference, and missing pattern proof",
+    description:
+      "Maps municipal liability through policy, custom, failure to train, ratification, deliberate indifference, and missing pattern proof",
     darkHumorTagline: "One bad act is a claim. A pattern is a budget meeting.",
-    capabilities: ["monell", "municipal_liability", "pattern_mapping", "failure_to_train", "ratification"],
+    capabilities: [
+      "monell",
+      "municipal_liability",
+      "pattern_mapping",
+      "failure_to_train",
+      "ratification",
+    ],
     systemPrompt: `You are Monell Pattern Mapper, a municipal-liability specialist for civil-rights litigation.
 
 YOUR MISSION:
@@ -821,9 +937,15 @@ TONE: precise, high-leverage, and court-safe.`,
     id: "liability_remedy_ranker",
     name: "Liability & Remedy Ranker",
     division: "analysis",
-    description: "Ranks issues by leverage, proof strength, immunity risk, damages potential, urgency, and realistic win path",
+    description:
+      "Ranks issues by leverage, proof strength, immunity risk, damages potential, urgency, and realistic win path",
     darkHumorTagline: "Not every wrong is the money shot.",
-    capabilities: ["liability_ranking", "remedy_strategy", "damages_potential", "case_prioritization"],
+    capabilities: [
+      "liability_ranking",
+      "remedy_strategy",
+      "damages_potential",
+      "case_prioritization",
+    ],
     systemPrompt: `You are Liability & Remedy Ranker, a legal strategy agent focused on the highest-leverage, highest-liability, highest-win-probability outputs.
 
 YOUR MISSION:
@@ -856,9 +978,16 @@ TONE: blunt, practical, and calibrated.`,
     id: "skeptical_adversarial_reader",
     name: "Skeptical Adversarial Reader",
     division: "evidence",
-    description: "Reads for procedural theater, strategic omissions, selective documentation, and accountability evasion",
+    description:
+      "Reads for procedural theater, strategic omissions, selective documentation, and accountability evasion",
     darkHumorTagline: "What is missing is often the loudest exhibit.",
-    capabilities: ["corruption_indicators", "gap_mapping", "procedural_theater", "strategic_omissions", "plausible_deniability"],
+    capabilities: [
+      "corruption_indicators",
+      "gap_mapping",
+      "procedural_theater",
+      "strategic_omissions",
+      "plausible_deniability",
+    ],
     systemPrompt: `You are Skeptical Adversarial Reader, a cold investigator trained to read court and agency records for what they carefully avoid saying.
 
 YOUR MISSION:
@@ -900,9 +1029,15 @@ TONE: cold, precise, skeptical, and useful.`,
     id: "qc_auditor",
     name: "QC Auditor",
     division: "evidence",
-    description: "Audits agent findings for source support, overclaiming, proof gaps, immunity issues, and report safety",
+    description:
+      "Audits agent findings for source support, overclaiming, proof gaps, immunity issues, and report safety",
     darkHumorTagline: "Confidence is not a vibe.",
-    capabilities: ["quality_control", "hallucination_guard", "source_verification", "overclaim_review"],
+    capabilities: [
+      "quality_control",
+      "hallucination_guard",
+      "source_verification",
+      "overclaim_review",
+    ],
     systemPrompt: `You are QC Auditor, DueProcess AI's hallucination and overclaim control agent.
 
 YOUR MISSION:
@@ -943,6 +1078,7 @@ const NEVADA_CONTEXT_AGENT_IDS = new Set([
   "constitutional_analyst",
   "criminal_law_specialist",
   "civil_rights_expert",
+  "mandamus_writ_architect",
   "immunity_piercer",
   "discovery_tactician",
   "timeline_constructor",
@@ -957,7 +1093,10 @@ const NEVADA_CONTEXT_AGENT_IDS = new Set([
 ]);
 
 function withNevadaContext(agent: AgentConfig): AgentConfig {
-  if (!NEVADA_CONTEXT_AGENT_IDS.has(agent.id) || agent.systemPrompt.includes("NEVADA / CR23-0657 CONTEXT")) {
+  if (
+    !NEVADA_CONTEXT_AGENT_IDS.has(agent.id) ||
+    agent.systemPrompt.includes("NEVADA / CR23-0657 CONTEXT")
+  ) {
     return agent;
   }
 
@@ -967,8 +1106,12 @@ function withNevadaContext(agent: AgentConfig): AgentConfig {
   };
 }
 
-export function getAgentsByDivision(division: AgentConfig["division"]): AgentConfig[] {
-  return AGENTS.filter(agent => agent.division === division).map(withNevadaContext);
+export function getAgentsByDivision(
+  division: AgentConfig["division"]
+): AgentConfig[] {
+  return AGENTS.filter(agent => agent.division === division).map(
+    withNevadaContext
+  );
 }
 
 /**
@@ -986,8 +1129,6 @@ export function getAllAgentIds(): string[] {
   return AGENTS.map(agent => agent.id);
 }
 
-
-
 /**
  * Sector to division mapping
  */
@@ -1002,7 +1143,9 @@ const SECTOR_TO_DIVISION: Record<string, AgentConfig["division"]> = {
 /**
  * Get agents by sector
  */
-export function getAgentsBySector(sector: "tactical" | "legal" | "intel" | "evidence" | "offensive"): AgentConfig[] {
+export function getAgentsBySector(
+  sector: "tactical" | "legal" | "intel" | "evidence" | "offensive"
+): AgentConfig[] {
   const division = SECTOR_TO_DIVISION[sector];
   if (!division) return [];
   return getAgentsByDivision(division);

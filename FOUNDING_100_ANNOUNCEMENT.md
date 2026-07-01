@@ -1,5 +1,7 @@
 # FOUNDING 100: ENLISTMENT NOW OPEN
 
+> Archived launch copy. This references older Founding 100 and per-agent/per-sector pricing. Use current pricing from `server/products.ts` before sending any offer.
+
 ## THE WEAPON
 
 You are looking at a litigation war engine.

@@ -1,5 +1,7 @@
 # CONFIDENTIAL: DueProcess AI Phased Pricing Strategy
 
+> Archived backup. This file predates the current platform-tier pricing model. Use `server/products.ts` for active pricing.
+
 ## Document Purpose
 
 This document outlines the multi-phase pricing strategy for DueProcess AI. It is an internal-only "war binder" that defines the rules, pricing, and messaging for each stage of market penetration. This strategy is designed to maximize initial user acquisition, establish market dominance, and secure long-term revenue by pricing the platform according to its real-world value as a litigation engine.

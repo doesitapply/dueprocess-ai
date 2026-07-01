@@ -1,5 +1,7 @@
 # FOR THE FIRST 200: ENLISTMENT IS NOW OPEN.
 
+> Archived launch copy. This references older pricing and should not be used as current offer copy without updating against `server/products.ts`.
+
 They built a system of qualified immunity, procedural traps, and institutional shields to protect themselves. They assumed you would stay disorganized, underfunded, and silent.
 
 They were wrong.

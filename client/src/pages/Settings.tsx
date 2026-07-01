@@ -20,12 +20,16 @@ import { trpc } from "@/lib/trpc";
 import {
   Activity,
   AlertTriangle,
+  CreditCard,
   Copy,
   Database,
   DollarSign,
   HardDrive,
+  KeyRound,
   Loader2,
   Monitor,
+  ReceiptText,
+  Rocket,
   Settings as SettingsIcon,
   Shield,
   Trash2,
@@ -75,6 +79,43 @@ function StatCard({
 
 function formatUsd(value: number | undefined) {
   return `$${Number(value ?? 0).toFixed(4)}`;
+}
+
+function formatMonthlyDollars(value: unknown) {
+  return `$${Number(value ?? 0).toLocaleString()}/mo`;
+}
+
+function formatDate(value: string | undefined) {
+  if (!value) return "none";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function formatCompactValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "none";
+  return String(value);
+}
+
+function accessLabel(name: string) {
+  const labels: Record<string, string> = {
+    agentAccess: "Agent Access",
+    drafting: "Drafting",
+    pdfExport: "PDF Export",
+    precedentSearch: "Precedent Search",
+    apiAccess: "API Access",
+    swarmProcessing: "Swarm Processing",
+  };
+  if (labels[name]) return labels[name];
+  return name.replace(/([A-Z])/g, " $1").trim();
+}
+
+function configuredBadge(isConfigured: boolean) {
+  return isConfigured ? (
+    <CommandBadge tone="success">configured</CommandBadge>
+  ) : (
+    <CommandBadge tone="danger">missing</CommandBadge>
+  );
 }
 
 function copyToClipboard(text: string, label: string) {
@@ -147,18 +188,29 @@ export default function Settings() {
         >
           <div className="grid min-w-0 grid-cols-3 gap-3">
             <StatCard
-              label="Documents"
-              value={overview.data?.inventory.documents ?? 0}
+              label="Plan"
+              value={overview.data?.commercial.effectivePlan.name ?? "Free"}
             />
             <StatCard
-              label="Ready"
-              value={overview.data?.inventory.readyDocuments ?? 0}
-              tone="text-[#3FB950]"
+              label="Gates"
+              value={`${overview.data?.commercial.revenueReadiness.readyChecks ?? 0}/${overview.data?.commercial.revenueReadiness.totalChecks ?? 0}`}
+              tone={
+                (overview.data?.commercial.revenueReadiness.blockers ?? [])
+                  .length > 0
+                  ? "text-[#D29922]"
+                  : "text-[#3FB950]"
+              }
             />
             <StatCard
-              label="Outputs"
-              value={overview.data?.inventory.savedAgentOutputs ?? 0}
-              tone="text-[#58A6FF]"
+              label="LLM"
+              value={
+                usage.data?.aiUsage.exactTokenTelemetryEnabled ? "On" : "Off"
+              }
+              tone={
+                usage.data?.aiUsage.exactTokenTelemetryEnabled
+                  ? "text-[#3FB950]"
+                  : "text-[#D29922]"
+              }
             />
           </div>
         </CommandHero>
@@ -171,6 +223,13 @@ export default function Settings() {
             >
               <Database className="h-4 w-4" />
               Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="revenue"
+              className="gap-2 border border-zinc-200 bg-white/70 data-[state=active]:bg-zinc-950 data-[state=active]:text-white dark:border-white/10 dark:bg-white/[0.045] dark:text-white dark:data-[state=active]:bg-amber-300 dark:data-[state=active]:text-zinc-950"
+            >
+              <CreditCard className="h-4 w-4" />
+              Revenue
             </TabsTrigger>
             <TabsTrigger
               value="usage"
@@ -265,7 +324,444 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="revenue" className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <Card className="border-amber-500/30 bg-white/86 dark:border-amber-400/25 dark:bg-[#111722]/88">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Rocket className="h-5 w-5 text-amber-700 dark:text-amber-300" />
+                    Commercial Readiness
+                  </CardTitle>
+                  <CardDescription className="text-zinc-500 dark:text-slate-400">
+                    The blunt money gate: Stripe, plan access, usage model, and
+                    anything still blocking paid customers.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <StatCard
+                      label="Revenue checks"
+                      value={`${overview.data?.commercial.revenueReadiness.readyChecks ?? 0}/${overview.data?.commercial.revenueReadiness.totalChecks ?? 0}`}
+                      tone={
+                        (
+                          overview.data?.commercial.revenueReadiness.blockers ??
+                          []
+                        ).length > 0
+                          ? "text-[#D29922]"
+                          : "text-[#3FB950]"
+                      }
+                    />
+                    <StatCard
+                      label="Checkout plans"
+                      value={`${overview.data?.commercial.revenueReadiness.checkoutReadyPlans ?? 0}/${overview.data?.commercial.revenueReadiness.subscriptionPlans ?? 0}`}
+                      tone="text-[#58A6FF]"
+                    />
+                    <StatCard
+                      label="Compute packs"
+                      value={`${overview.data?.commercial.revenueReadiness.computePacksConfigured ?? 0}/${overview.data?.commercial.revenueReadiness.computePacksTotal ?? 0}`}
+                      tone="text-[#D29922]"
+                    />
+                    <StatCard
+                      label="Blockers"
+                      value={
+                        overview.data?.commercial.revenueReadiness.blockers
+                          .length ?? 0
+                      }
+                      tone={
+                        (
+                          overview.data?.commercial.revenueReadiness.blockers ??
+                          []
+                        ).length > 0
+                          ? "text-[#F85149]"
+                          : "text-[#3FB950]"
+                      }
+                    />
+                  </div>
+
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-slate-950/55">
+                    <div className="border-b border-zinc-200 px-4 py-3 text-sm font-medium dark:border-white/10">
+                      Monetization blockers
+                    </div>
+                    <div className="divide-y divide-zinc-200 dark:divide-white/10">
+                      {(
+                        overview.data?.commercial.revenueReadiness.blockers ??
+                        []
+                      ).map(blocker => (
+                        <div
+                          key={blocker}
+                          className="flex items-start gap-3 px-4 py-3 text-sm text-zinc-700 dark:text-slate-300"
+                        >
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-300" />
+                          <span>{blocker}</span>
+                        </div>
+                      ))}
+                      {(
+                        overview.data?.commercial.revenueReadiness.blockers ??
+                        []
+                      ).length === 0 && (
+                        <div className="flex items-start gap-3 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                          <Shield className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            No revenue blockers detected from current config.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <KeyRound className="h-5 w-5 text-[#58A6FF]" />
+                    Effective Account Access
+                  </CardTitle>
+                  <CardDescription className="text-zinc-500 dark:text-slate-400">
+                    What this logged-in account actually gets right now.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-slate-950/55">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-zinc-500 dark:text-slate-500">
+                          Active plan
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-white">
+                          {overview.data?.commercial.effectivePlan.name ??
+                            "Free"}
+                        </p>
+                        <p className="mt-2 text-sm leading-5 text-zinc-600 dark:text-slate-400">
+                          {overview.data?.commercial.effectivePlan.description}
+                        </p>
+                      </div>
+                      {overview.data?.commercial.effectivePlan.adminOverride ? (
+                        <CommandBadge tone="accent">
+                          admin override
+                        </CommandBadge>
+                      ) : (
+                        <CommandBadge tone="success">
+                          {overview.data?.commercial.effectivePlan.status ??
+                            "active"}
+                        </CommandBadge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <StatCard
+                      label="Base"
+                      value={formatMonthlyDollars(
+                        overview.data?.commercial.effectivePlan.price
+                      )}
+                    />
+                    <StatCard
+                      label="Billing"
+                      value={
+                        overview.data?.commercial.effectivePlan.billingModel ??
+                        "subscription"
+                      }
+                      tone="text-[#58A6FF]"
+                    />
+                  </div>
+
+                  <div className="grid gap-2 text-sm">
+                    {Object.entries(
+                      overview.data?.commercial.effectivePlan.access ?? {}
+                    ).map(([name, enabled]) => (
+                      <div
+                        key={name}
+                        className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-white/10 dark:bg-slate-950/55"
+                      >
+                        <span className="capitalize text-zinc-700 dark:text-slate-300">
+                          {accessLabel(name)}
+                        </span>
+                        {typeof enabled === "boolean"
+                          ? statusBadge(enabled ? "ok" : "warn")
+                          : formatCompactValue(enabled)}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ReceiptText className="h-5 w-5 text-[#3FB950]" />
+                    Stripe Plan Wiring
+                  </CardTitle>
+                  <CardDescription className="text-zinc-500 dark:text-slate-400">
+                    Real price IDs are required before checkout is money-real.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(overview.data?.commercial.paidPlanReadiness ?? []).map(
+                    plan => (
+                      <div
+                        key={plan.id}
+                        className="rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-white/10 dark:bg-slate-950/55"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-zinc-950 dark:text-white">
+                              {plan.name}
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-500 dark:text-slate-400">
+                              {formatMonthlyDollars(plan.price)}
+                              {plan.founderPrice
+                                ? ` / ${formatMonthlyDollars(plan.founderPrice)} founder`
+                                : ""}{" "}
+                              - {plan.billingModel}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {plan.billingModel === "usage" ? (
+                              <CommandBadge tone="warning">
+                                manual metered
+                              </CommandBadge>
+                            ) : (
+                              configuredBadge(plan.checkoutReady)
+                            )}
+                            {plan.founderPrice
+                              ? configuredBadge(plan.founderPriceIdConfigured)
+                              : null}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
+                <CardHeader>
+                  <CardTitle>Compute Pack Wiring</CardTitle>
+                  <CardDescription className="text-zinc-500 dark:text-slate-400">
+                    One-time packs are the fastest upsell for heavy evidence
+                    months.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(overview.data?.commercial.computePackReadiness ?? []).map(
+                    pack => (
+                      <div
+                        key={pack.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-white/10 dark:bg-slate-950/55"
+                      >
+                        <div>
+                          <p className="font-medium text-zinc-950 dark:text-white">
+                            {pack.name}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500 dark:text-slate-400">
+                            ${pack.price} - {pack.pages.toLocaleString()} pages
+                            / {pack.agentRuns} runs
+                          </p>
+                        </div>
+                        {configuredBadge(pack.priceIdConfigured)}
+                      </div>
+                    )
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
+              <CardHeader>
+                <CardTitle>Current Plan Limits</CardTitle>
+                <CardDescription className="text-zinc-500 dark:text-slate-400">
+                  What the backend access-control layer should enforce for this
+                  account.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-4">
+                <StatCard
+                  label="Cases"
+                  value={
+                    overview.data?.commercial.effectivePlan.limits.cases ??
+                    "none"
+                  }
+                />
+                <StatCard
+                  label="Uploads"
+                  value={
+                    overview.data?.commercial.effectivePlan.limits
+                      .documentUploads ?? "none"
+                  }
+                />
+                <StatCard
+                  label="Pages"
+                  value={
+                    overview.data?.commercial.effectivePlan.limits
+                      .pagesAnalyzed ?? "none"
+                  }
+                />
+                <StatCard
+                  label="Chats"
+                  value={
+                    overview.data?.commercial.effectivePlan.limits
+                      .chatMessages ?? "none"
+                  }
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="usage" className="space-y-6">
+            <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ReceiptText className="h-5 w-5 text-[#58A6FF]" />
+                  Billing Period Usage Snapshot
+                </CardTitle>
+                <CardDescription className="text-zinc-500 dark:text-slate-400">
+                  Current-period usage from DueProcess tables. This is the
+                  closest server-side source of truth before Stripe metered
+                  invoice items are wired.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatCard
+                    label="Period start"
+                    value={formatDate(
+                      usage.data?.billing.snapshot?.period.start
+                    )}
+                  />
+                  <StatCard
+                    label="Period end"
+                    value={formatDate(usage.data?.billing.snapshot?.period.end)}
+                  />
+                  <StatCard
+                    label="Period source"
+                    value={
+                      usage.data?.billing.snapshot?.period.source ??
+                      "calendar_month"
+                    }
+                  />
+                  <StatCard
+                    label="Reports generated"
+                    value={
+                      usage.data?.billing.snapshot?.current.reportsGenerated ??
+                      0
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatCard
+                    label="Document uploads"
+                    value={
+                      usage.data?.billing.snapshot?.current.documentUploads ?? 0
+                    }
+                  />
+                  <StatCard
+                    label="Pages analyzed"
+                    value={
+                      usage.data?.billing.snapshot?.current.pagesAnalyzed ?? 0
+                    }
+                    tone="text-[#58A6FF]"
+                  />
+                  <StatCard
+                    label="Agent runs"
+                    value={usage.data?.billing.snapshot?.current.agentRuns ?? 0}
+                  />
+                  <StatCard
+                    label="Agent calls"
+                    value={
+                      usage.data?.billing.snapshot?.current.agentCalls ?? 0
+                    }
+                    tone="text-[#D29922]"
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatCard
+                    label="Exact LLM calls"
+                    value={
+                      usage.data?.billing.snapshot?.current.exactLlmCalls ?? 0
+                    }
+                  />
+                  <StatCard
+                    label="Exact tokens"
+                    value={
+                      usage.data?.billing.snapshot?.current.exactTokens ?? 0
+                    }
+                    tone="text-[#58A6FF]"
+                  />
+                  <StatCard
+                    label="Exact cost"
+                    value={formatUsd(
+                      usage.data?.billing.snapshot?.current.exactCostUsd
+                    )}
+                    tone="text-[#3FB950]"
+                  />
+                  <StatCard
+                    label="Page limit"
+                    value={formatCompactValue(
+                      usage.data?.billing.snapshot?.limits.pagesAnalyzed
+                    )}
+                  />
+                </div>
+
+                {usage.data?.billing.snapshot?.firmUsage ? (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 dark:border-amber-400/20 dark:bg-amber-400/8">
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <StatCard
+                        label="Included pages"
+                        value={
+                          usage.data.billing.snapshot.firmUsage.includedPages
+                        }
+                      />
+                      <StatCard
+                        label="Page overage"
+                        value={
+                          usage.data.billing.snapshot.firmUsage
+                            .pagesOverIncluded
+                        }
+                        tone="text-[#D29922]"
+                      />
+                      <StatCard
+                        label="Agent overage"
+                        value={
+                          usage.data.billing.snapshot.firmUsage
+                            .agentCallsOverIncluded
+                        }
+                        tone="text-[#D29922]"
+                      />
+                      <StatCard
+                        label="Est. overage"
+                        value={formatUsd(
+                          usage.data.billing.snapshot.firmUsage
+                            .estimatedOverageUsd
+                        )}
+                        tone="text-[#3FB950]"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {(usage.data?.billing.snapshot?.alerts ?? []).length > 0 ? (
+                  <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-100">
+                    <p className="font-semibold">Usage alerts</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {usage.data?.billing.snapshot?.alerts.map(alert => (
+                        <li key={alert}>{alert}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-100">
+                    No current-period usage alerts from server-side metering
+                    snapshot.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

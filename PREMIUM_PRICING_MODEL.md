@@ -1,5 +1,7 @@
 # DueProcess AI - Premium Pricing Model (Market-Based)
 
+> Archived pricing experiment. The active code now uses platform tiers in `server/products.ts`: Free, Advocate, Litigator, Firm, plus compute packs. Do not use this document as current Stripe setup guidance.
+
 ## Research Summary
 
 Based on comprehensive market research of legal tech platforms, AI legal assistants, and law firm technology spending in 2025:

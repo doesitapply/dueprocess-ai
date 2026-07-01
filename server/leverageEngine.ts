@@ -1,6 +1,13 @@
 import type { Document } from "../drizzle/schema";
 import type { AgentConfig } from "./agentConfig";
 import { invokeLLM, type InvokeResult } from "./_core/llm";
+import {
+  classifyMandamusRoute,
+  hasMandamusRouteCode,
+  isMandamusRelevantFinding,
+  mandamusRouteAction,
+  mandamusRouteCode,
+} from "./mandamusSkill";
 
 export const LEVERAGE_PROMPT_VERSION = "leverage-v1";
 export const QC_CONFIDENCE_THRESHOLD = 95;
@@ -35,7 +42,13 @@ export type FindingType =
   | "adverse_fact";
 
 export type FindingSeverity = "low" | "medium" | "high" | "critical";
-export type QcStatus = "not_required" | "pending" | "approved" | "downgraded" | "needs_more_proof" | "blocked";
+export type QcStatus =
+  | "not_required"
+  | "pending"
+  | "approved"
+  | "downgraded"
+  | "needs_more_proof"
+  | "blocked";
 
 export type SourceAnchor = {
   documentId: number;
@@ -93,6 +106,12 @@ const highRiskNeedles = [
   "seizure",
   "malicious prosecution",
   "due process",
+  "mandamus",
+  "writ",
+  "prohibition",
+  "extraordinary relief",
+  "clear duty",
+  "no adequate remedy",
 ];
 
 function clampScore(value: unknown, fallback: number): number {
@@ -121,17 +140,29 @@ function parseJsonObject(value: string): unknown {
 
 function normalizeArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item).trim()).filter(Boolean).slice(0, 12);
+  return value
+    .map(item => String(item).trim())
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
-function normalizeAnchor(value: unknown, documents: Document[]): SourceAnchor | null {
+function normalizeAnchor(
+  value: unknown,
+  documents: Document[]
+): SourceAnchor | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const documentId = Number(record.documentId);
-  const document = documents.find((item) => item.id === documentId);
+  const document = documents.find(item => item.id === documentId);
   if (!document) return null;
-  const quote = typeof record.quote === "string" ? record.quote.trim().slice(0, 1200) : undefined;
-  const support = typeof record.support === "string" ? record.support.trim().slice(0, 1200) : undefined;
+  const quote =
+    typeof record.quote === "string"
+      ? record.quote.trim().slice(0, 1200)
+      : undefined;
+  const support =
+    typeof record.support === "string"
+      ? record.support.trim().slice(0, 1200)
+      : undefined;
   return {
     documentId,
     fileName: document.fileName,
@@ -140,7 +171,10 @@ function normalizeAnchor(value: unknown, documents: Document[]): SourceAnchor | 
   };
 }
 
-function coerceFinding(value: unknown, documents: Document[]): StructuredFinding | null {
+function coerceFinding(
+  value: unknown,
+  documents: Document[]
+): StructuredFinding | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const findingType = String(record.findingType || "") as FindingType;
@@ -159,22 +193,58 @@ function coerceFinding(value: unknown, documents: Document[]): StructuredFinding
   if (!allowedTypes.includes(findingType)) return null;
 
   const sourceAnchors = Array.isArray(record.sourceAnchors)
-    ? record.sourceAnchors.map((anchor) => normalizeAnchor(anchor, documents)).filter((anchor): anchor is SourceAnchor => Boolean(anchor))
+    ? record.sourceAnchors
+        .map(anchor => normalizeAnchor(anchor, documents))
+        .filter((anchor): anchor is SourceAnchor => Boolean(anchor))
     : [];
 
-  return {
+  const finding: StructuredFinding = {
     title: String(record.title || "Untitled finding").slice(0, 255),
     findingType,
-    liabilityVector: String(record.liabilityVector || "Unclassified").slice(0, 255),
-    remedyPath: String(record.remedyPath || "Needs strategy review").slice(0, 255),
-    severity: (["low", "medium", "high", "critical"].includes(String(record.severity)) ? String(record.severity) : "medium") as FindingSeverity,
+    liabilityVector: String(record.liabilityVector || "Unclassified").slice(
+      0,
+      255
+    ),
+    remedyPath: String(record.remedyPath || "Needs strategy review").slice(
+      0,
+      255
+    ),
+    severity: (["low", "medium", "high", "critical"].includes(
+      String(record.severity)
+    )
+      ? String(record.severity)
+      : "medium") as FindingSeverity,
     confidence: clampScore(record.confidence, 50),
     leverageScore: clampScore(record.leverageScore, 50),
-    summary: String(record.summary || "").trim() || "No finding summary provided.",
+    summary:
+      String(record.summary || "").trim() || "No finding summary provided.",
     sourceAnchors,
     missingRecords: normalizeArray(record.missingRecords),
     legalAuthorities: normalizeArray(record.legalAuthorities),
-    nextAction: String(record.nextAction || "Review supporting records and decide next filing step.").trim(),
+    nextAction: String(
+      record.nextAction ||
+        "Review supporting records and decide next filing step."
+    ).trim(),
+  };
+
+  return enforceMandamusRouteLabel(finding);
+}
+
+function enforceMandamusRouteLabel(
+  finding: StructuredFinding
+): StructuredFinding {
+  if (!isMandamusRelevantFinding(finding)) return finding;
+  if (hasMandamusRouteCode(finding.nextAction)) return finding;
+
+  const route = classifyMandamusRoute(finding);
+  const code = mandamusRouteCode(route);
+  return {
+    ...finding,
+    nextAction: `${code}: ${mandamusRouteAction(route)} ${finding.nextAction}`,
+    qcStatus: finding.qcStatus || "pending",
+    qcReason:
+      finding.qcReason ||
+      `Mandamus route label ${code} applied by deterministic writ gate.`,
   };
 }
 
@@ -188,29 +258,40 @@ export function parseStructuredAgentOutput(
     return {
       agentId: agent.id,
       agentName: agent.name,
-      summary: rawContent.slice(0, 1200) || "Agent produced unstructured output.",
+      summary:
+        rawContent.slice(0, 1200) || "Agent produced unstructured output.",
       findings: [],
     };
   }
 
   const record = parsed as Record<string, unknown>;
   const findings = Array.isArray(record.findings)
-    ? record.findings.map((finding) => coerceFinding(finding, documents)).filter((finding): finding is StructuredFinding => Boolean(finding))
+    ? record.findings
+        .map(finding => coerceFinding(finding, documents))
+        .filter((finding): finding is StructuredFinding => Boolean(finding))
     : [];
 
   return {
     agentId: agent.id,
     agentName: agent.name,
-    summary: String(record.summary || "").trim() || findings.map((finding) => finding.title).join("; ") || "No summary provided.",
+    summary:
+      String(record.summary || "").trim() ||
+      findings.map(finding => finding.title).join("; ") ||
+      "No summary provided.",
     findings,
   };
 }
 
-export function verifyFindingQuotes(finding: StructuredFinding, documents: Document[]): StructuredFinding {
-  const sourceAnchors = finding.sourceAnchors.map((anchor) => {
+export function verifyFindingQuotes(
+  finding: StructuredFinding,
+  documents: Document[]
+): StructuredFinding {
+  const sourceAnchors = finding.sourceAnchors.map(anchor => {
     if (!anchor.quote) return anchor;
-    const document = documents.find((item) => item.id === anchor.documentId);
-    const haystack = normalizeText(document?.extractedText || document?.summary || "");
+    const document = documents.find(item => item.id === anchor.documentId);
+    const haystack = normalizeText(
+      document?.extractedText || document?.summary || ""
+    );
     const needle = normalizeText(anchor.quote);
     if (!needle || haystack.includes(needle)) return anchor;
     return {
@@ -219,7 +300,9 @@ export function verifyFindingQuotes(finding: StructuredFinding, documents: Docum
     };
   });
 
-  const hasMissingQuote = sourceAnchors.some((anchor) => anchor.support?.includes("Quote not found verbatim"));
+  const hasMissingQuote = sourceAnchors.some(anchor =>
+    anchor.support?.includes("Quote not found verbatim")
+  );
   if (!hasMissingQuote) return { ...finding, sourceAnchors };
 
   return {
@@ -233,7 +316,15 @@ export function verifyFindingQuotes(finding: StructuredFinding, documents: Docum
 
 export function isHighRiskFinding(finding: StructuredFinding): boolean {
   if (finding.severity === "critical") return true;
-  if (["strong_inference", "weak_inference", "missing_critical", "suspicious_absence"].includes(finding.findingType)) return true;
+  if (
+    [
+      "strong_inference",
+      "weak_inference",
+      "missing_critical",
+      "suspicious_absence",
+    ].includes(finding.findingType)
+  )
+    return true;
   const body = normalizeText(
     [
       finding.title,
@@ -244,38 +335,58 @@ export function isHighRiskFinding(finding: StructuredFinding): boolean {
       finding.missingRecords.join(" "),
     ].join(" ")
   );
-  return highRiskNeedles.some((needle) => body.includes(needle));
+  return highRiskNeedles.some(needle => body.includes(needle));
 }
 
-export function applyRiskBasedQcGate(finding: StructuredFinding): StructuredFinding {
-  const needsQc = finding.confidence < QC_CONFIDENCE_THRESHOLD || isHighRiskFinding(finding);
+export function applyRiskBasedQcGate(
+  finding: StructuredFinding
+): StructuredFinding {
+  const needsQc =
+    finding.confidence < QC_CONFIDENCE_THRESHOLD || isHighRiskFinding(finding);
   if (!needsQc) {
     return {
       ...finding,
       qcStatus: finding.qcStatus || "not_required",
-      qcReason: finding.qcReason || "Confidence at or above threshold and no high-risk trigger.",
+      qcReason:
+        finding.qcReason ||
+        "Confidence at or above threshold and no high-risk trigger.",
     };
   }
   return {
     ...finding,
     qcStatus: "pending",
-    qcReason: finding.qcReason || `Risk-based QC required: ${finding.confidence < QC_CONFIDENCE_THRESHOLD ? "confidence below 95" : "high-risk legal category"}.`,
+    qcReason:
+      finding.qcReason ||
+      `Risk-based QC required: ${finding.confidence < QC_CONFIDENCE_THRESHOLD ? "confidence below 95" : "high-risk legal category"}.`,
   };
 }
 
-export function isReportEligible(qcStatus: QcStatus | null | undefined): boolean {
-  return qcStatus === "not_required" || qcStatus === "approved" || qcStatus === "downgraded";
+export function isReportEligible(
+  qcStatus: QcStatus | null | undefined
+): boolean {
+  return (
+    qcStatus === "not_required" ||
+    qcStatus === "approved" ||
+    qcStatus === "downgraded"
+  );
 }
 
 function isMissingRecordFinding(finding: StructuredFinding): boolean {
-  return ["missing_record", "missing_critical", "suspicious_absence"].includes(finding.findingType);
+  return ["missing_record", "missing_critical", "suspicious_absence"].includes(
+    finding.findingType
+  );
 }
 
 function hasVerbatimQuoteProblem(finding: StructuredFinding): boolean {
-  return finding.sourceAnchors.some((anchor) => anchor.support?.includes("Quote not found verbatim"));
+  return finding.sourceAnchors.some(anchor =>
+    anchor.support?.includes("Quote not found verbatim")
+  );
 }
 
-export function normalizeQcAuditForReportUse(finding: StructuredFinding, audit: QcAuditResult): QcAuditResult {
+export function normalizeQcAuditForReportUse(
+  finding: StructuredFinding,
+  audit: QcAuditResult
+): QcAuditResult {
   if (audit.status !== "needs_more_proof") return audit;
 
   if (isMissingRecordFinding(finding)) {
@@ -308,7 +419,11 @@ export function normalizeQcAuditForReportUse(finding: StructuredFinding, audit: 
     };
   }
 
-  if (finding.findingType !== "record_supported" && finding.sourceAnchors.length > 0 && !hasVerbatimQuoteProblem(finding)) {
+  if (
+    finding.findingType !== "record_supported" &&
+    finding.sourceAnchors.length > 0 &&
+    !hasVerbatimQuoteProblem(finding)
+  ) {
     return {
       ...audit,
       status: "downgraded",
@@ -326,9 +441,18 @@ export function normalizeQcAuditForReportUse(finding: StructuredFinding, audit: 
   return audit;
 }
 
-export function fallbackQcAuditForFinding(finding: StructuredFinding, error?: unknown): QcAuditResult {
-  const errorMessage = error instanceof Error ? error.message : "QC audit did not return a usable result.";
-  if (finding.findingType === "record_supported" && finding.sourceAnchors.length === 0) {
+export function fallbackQcAuditForFinding(
+  finding: StructuredFinding,
+  error?: unknown
+): QcAuditResult {
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : "QC audit did not return a usable result.";
+  if (
+    finding.findingType === "record_supported" &&
+    finding.sourceAnchors.length === 0
+  ) {
     return {
       status: "blocked",
       confidence: Math.min(finding.confidence, 50),
@@ -340,7 +464,10 @@ export function fallbackQcAuditForFinding(finding: StructuredFinding, error?: un
     return {
       status: "downgraded",
       confidence: Math.min(finding.confidence, 88),
-      issues: [errorMessage, "Fallback QC: usable only as a missing-record demand, not as a proven fact."],
+      issues: [
+        errorMessage,
+        "Fallback QC: usable only as a missing-record demand, not as a proven fact.",
+      ],
       correctedSummary: `${finding.summary} Treat this as a missing-record demand and proof gap, not as a proven factual accusation.`,
     };
   }
@@ -349,7 +476,10 @@ export function fallbackQcAuditForFinding(finding: StructuredFinding, error?: un
     return {
       status: "downgraded",
       confidence: Math.min(finding.confidence, 85),
-      issues: [errorMessage, "Fallback QC: authority must be verified before filing."],
+      issues: [
+        errorMessage,
+        "Fallback QC: authority must be verified before filing.",
+      ],
       correctedSummary: `${finding.summary} Treat cited authority as a verification task before any court filing.`,
     };
   }
@@ -358,7 +488,10 @@ export function fallbackQcAuditForFinding(finding: StructuredFinding, error?: un
     return {
       status: "downgraded",
       confidence: Math.min(finding.confidence, 84),
-      issues: [errorMessage, "Fallback QC: source anchors exist, but attorney review is required before strong use."],
+      issues: [
+        errorMessage,
+        "Fallback QC: source anchors exist, but attorney review is required before strong use.",
+      ],
       correctedSummary: `${finding.summary} Treat this as cautious, source-linked analysis requiring review before filing.`,
     };
   }
@@ -366,7 +499,10 @@ export function fallbackQcAuditForFinding(finding: StructuredFinding, error?: un
   return {
     status: "needs_more_proof",
     confidence: Math.min(finding.confidence, 70),
-    issues: [errorMessage, "Fallback QC could not make this finding report-ready."],
+    issues: [
+      errorMessage,
+      "Fallback QC could not make this finding report-ready.",
+    ],
   };
 }
 
@@ -377,7 +513,8 @@ export function estimateCostCents(totalTokens: number): number {
 export function usageFromResponse(response: InvokeResult) {
   const promptTokens = response.usage?.prompt_tokens ?? 0;
   const completionTokens = response.usage?.completion_tokens ?? 0;
-  const totalTokens = response.usage?.total_tokens ?? promptTokens + completionTokens;
+  const totalTokens =
+    response.usage?.total_tokens ?? promptTokens + completionTokens;
   return {
     model: response.model,
     promptTokens,
@@ -387,7 +524,27 @@ export function usageFromResponse(response: InvokeResult) {
   };
 }
 
-export function buildStructuredAgentPrompt(agent: AgentConfig, scopeLabel: string, eraInstruction: string, caseRecord: string): string {
+export function buildStructuredAgentPrompt(
+  agent: AgentConfig,
+  scopeLabel: string,
+  eraInstruction: string,
+  caseRecord: string
+): string {
+  const mandamusRules =
+    agent.id === "mandamus_writ_architect"
+      ? `
+Mandamus / writ-specific output rules:
+- Treat this as an element test, not ordinary motion drafting.
+- Every mandamus-relevant finding must put exactly one route code in nextAction: FILE_WRIT, DEMAND_RECORDS_FIRST, PRESERVE_FOR_APPEAL, or NOT_MANDAMUS.
+- Use FILE_WRIT only when source anchors support clear legal duty, beneficial interest / standing, refusal/failure/delay, no plain/speedy/adequate ordinary remedy, and a narrow command.
+- Use DEMAND_RECORDS_FIRST when the issue is promising but needs an order, docket entry, transcript, filing receipt, clerk notice, hearing log, certification, transport log, or other appendix proof.
+- Use PRESERVE_FOR_APPEAL when appeal, habeas, ordinary motion practice, or later review may be adequate.
+- Use NOT_MANDAMUS for merits review, fact reweighing, damages, generalized misconduct, or outrage unsupported by a narrow legal command.
+- Missing records are demands, not proof of misconduct.
+- Mandamus does not pierce judicial immunity for damages; it is a non-damages command or supervisory relief path.
+`
+      : "";
+
   return `Run ${agent.name} on ${scopeLabel}.
 
 Return ONLY valid JSON using this exact shape:
@@ -420,6 +577,7 @@ Rules:
 - Separate what the record says from what should exist.
 - For high-liability categories, avoid overclaiming and state the proof gap.
 - Confidence must reflect source support, not outrage.
+${mandamusRules}
 
 ${eraInstruction}
 
@@ -429,10 +587,13 @@ SOURCE DOCUMENTS:
 ${caseRecord}`;
 }
 
-export async function auditFindingWithLLM(finding: StructuredFinding, documents: Document[]): Promise<QcAuditResult> {
+export async function auditFindingWithLLM(
+  finding: StructuredFinding,
+  documents: Document[]
+): Promise<QcAuditResult> {
   const sourceRecord = finding.sourceAnchors
-    .map((anchor) => {
-      const document = documents.find((item) => item.id === anchor.documentId);
+    .map(anchor => {
+      const document = documents.find(item => item.id === anchor.documentId);
       const text = document?.extractedText || document?.summary || "";
       return `Document ${anchor.documentId}: ${anchor.fileName}\nClaim quote: ${anchor.quote || "none"}\nSource text excerpt:\n${text.slice(0, 5000)}`;
     })
@@ -443,7 +604,8 @@ export async function auditFindingWithLLM(finding: StructuredFinding, documents:
     messages: [
       {
         role: "system",
-        content: "You are DueProcess AI's QC Auditor. Audit legal findings for source support, overclaiming, immunity problems, missing elements, adverse facts, and report safety. Return only JSON.",
+        content:
+          "You are DueProcess AI's QC Auditor. Audit legal findings for source support, overclaiming, immunity problems, missing elements, adverse facts, and report safety. Return only JSON.",
       },
       {
         role: "user",
@@ -472,37 +634,73 @@ Return JSON:
   }
   const record = parsed as Record<string, unknown>;
   const status = String(record.status);
-  const allowed: QcAuditResult["status"][] = ["approved", "downgraded", "needs_more_proof", "blocked"];
+  const allowed: QcAuditResult["status"][] = [
+    "approved",
+    "downgraded",
+    "needs_more_proof",
+    "blocked",
+  ];
   return {
-    status: allowed.includes(status as QcAuditResult["status"]) ? (status as QcAuditResult["status"]) : "needs_more_proof",
+    status: allowed.includes(status as QcAuditResult["status"])
+      ? (status as QcAuditResult["status"])
+      : "needs_more_proof",
     confidence: clampScore(record.confidence, Math.min(finding.confidence, 80)),
     issues: normalizeArray(record.issues),
-    correctedSummary: typeof record.correctedSummary === "string" ? record.correctedSummary : undefined,
+    correctedSummary:
+      typeof record.correctedSummary === "string"
+        ? record.correctedSummary
+        : undefined,
   };
 }
 
 export function buildWarRoomSynthesis(findings: StructuredFinding[]): string {
-  const eligible = findings.filter((finding) => isReportEligible(finding.qcStatus));
-  const ranked = [...eligible].sort((a, b) => b.leverageScore - a.leverageScore || b.confidence - a.confidence);
-  const blocked = findings.filter((finding) => !isReportEligible(finding.qcStatus));
-  const section = (title: string, rows: StructuredFinding[]) => [
-    `## ${title}`,
-    rows.length === 0
-      ? "No findings in this category."
-      : rows
-          .slice(0, 12)
-          .map((finding, index) =>
-            `${index + 1}. ${finding.title} (${finding.findingType}, confidence ${finding.confidence}, leverage ${finding.leverageScore}, QC ${finding.qcStatus})\n${finding.summary}\nNext: ${finding.nextAction}`
-          )
-          .join("\n\n"),
-  ].join("\n");
+  const eligible = findings.filter(finding =>
+    isReportEligible(finding.qcStatus)
+  );
+  const ranked = [...eligible].sort(
+    (a, b) => b.leverageScore - a.leverageScore || b.confidence - a.confidence
+  );
+  const blocked = findings.filter(
+    finding => !isReportEligible(finding.qcStatus)
+  );
+  const section = (title: string, rows: StructuredFinding[]) =>
+    [
+      `## ${title}`,
+      rows.length === 0
+        ? "No findings in this category."
+        : rows
+            .slice(0, 12)
+            .map(
+              (finding, index) =>
+                `${index + 1}. ${finding.title} (${finding.findingType}, confidence ${finding.confidence}, leverage ${finding.leverageScore}, QC ${finding.qcStatus})\n${finding.summary}\nNext: ${finding.nextAction}`
+            )
+            .join("\n\n"),
+    ].join("\n");
 
   return [
     "# War Room Synthesis",
     section("Highest-Leverage Findings", ranked),
-    section("Monell / Pattern Findings", ranked.filter((finding) => normalizeText(finding.liabilityVector).includes("monell") || normalizeText(finding.summary).includes("monell"))),
-    section("Missing Records To Demand", ranked.filter((finding) => ["missing_record", "missing_critical", "suspicious_absence"].includes(finding.findingType) || finding.missingRecords.length > 0)),
-    section("Adverse Facts And Defense Risk", ranked.filter((finding) => finding.findingType === "adverse_fact")),
+    section(
+      "Monell / Pattern Findings",
+      ranked.filter(
+        finding =>
+          normalizeText(finding.liabilityVector).includes("monell") ||
+          normalizeText(finding.summary).includes("monell")
+      )
+    ),
+    section(
+      "Missing Records To Demand",
+      ranked.filter(
+        finding =>
+          ["missing_record", "missing_critical", "suspicious_absence"].includes(
+            finding.findingType
+          ) || finding.missingRecords.length > 0
+      )
+    ),
+    section(
+      "Adverse Facts And Defense Risk",
+      ranked.filter(finding => finding.findingType === "adverse_fact")
+    ),
     section("Blocked Or Needs More Proof", blocked),
   ].join("\n\n");
 }

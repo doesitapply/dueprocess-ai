@@ -1,5 +1,7 @@
 # Stripe Setup Instructions for DueProcess AI
 
+> Archived Stripe setup instructions. Verify all current Stripe products against `server/products.ts` before using anything in this file.
+
 ## Overview
 This document provides step-by-step instructions for creating all Stripe products and prices for the new tiered pricing structure.
 

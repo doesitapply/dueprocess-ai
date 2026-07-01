@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("./pages/Home"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Cases = lazy(() => import("./pages/Cases"));
 const ProcessDocument = lazy(() => import("./pages/ProcessDocument"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const Payments = lazy(() => import("./pages/Payments"));
@@ -19,6 +20,7 @@ const OffensiveOps = lazy(() => import("./pages/sectors/OffensiveOps"));
 const IntegrationsHub = lazy(() => import("./pages/sectors/IntegrationsHub"));
 const CorpusCenter = lazy(() => import("./pages/sectors/CorpusCenter"));
 const Reports = lazy(() => import("./pages/Reports"));
+const DraftDirector = lazy(() => import("./pages/DraftDirector"));
 const Violations = lazy(() => import("./pages/Violations"));
 const MarketCommand = lazy(() => import("./pages/MarketCommand"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -44,9 +46,11 @@ function Router() {
       <Route path={"/payments"} component={Payments} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/reports"} component={Reports} />
+      <Route path={"/drafts"} component={DraftDirector} />
       <Route path={"/violations"} component={Violations} />
       <Route path={"/market"} component={MarketCommand} />
       <Route path={"/dashboard"} component={Dashboard} />
+      <Route path={"/cases"} component={Cases} />
       <Route path={"/process/:id"} component={ProcessDocument} />
       <Route path={"/sector/tactical"} component={TacticalOps} />
       <Route path={"/sector/intel"} component={IntelCenter} />

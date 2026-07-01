@@ -1,9 +1,10 @@
 import {
-  CommandHero,
   CommandMain,
   CommandSurface,
   CommandTopBar,
+  CommandWorkflowBar,
 } from "@/components/command-ui";
+import { WorkspaceCaseStrip } from "@/components/WorkspaceCaseStrip";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -377,6 +378,75 @@ export default function CorpusCenter() {
     (sum, record) => sum + record.duplicateCount,
     0
   );
+  const sourceAnchoredCount = (documents ?? []).filter(sourceAnchored).length;
+  const blockedInMasters = masterRecords.reduce(
+    (sum, record) => sum + record.blockedCount,
+    0
+  );
+  const intakeQualityGates = [
+    {
+      label: "Ready corpus",
+      value: `${counts.completed}/${counts.all}`,
+      detail:
+        counts.failed > 0
+          ? `${counts.failed} files are blocked from agent runs.`
+          : "Ready files can move into analysis and reports.",
+      icon: CheckCircle2,
+      tone:
+        counts.all > 0 && counts.completed === counts.all
+          ? "text-emerald-700 dark:text-emerald-300"
+          : "text-amber-700 dark:text-amber-300",
+    },
+    {
+      label: "Anchored",
+      value: `${sourceAnchoredCount}/${counts.all}`,
+      detail:
+        sourceAnchoredCount === counts.all
+          ? "Every file has quote-traceable source control."
+          : "Unanchored files cannot safely support claims.",
+      icon: Database,
+      tone:
+        sourceAnchoredCount === counts.all
+          ? "text-emerald-700 dark:text-emerald-300"
+          : "text-amber-700 dark:text-amber-300",
+    },
+    {
+      label: "Duplicates",
+      value: duplicateDocumentsFolded.toLocaleString(),
+      detail:
+        duplicateDocumentsFolded > 0
+          ? "Duplicate files folded into master records."
+          : "No exact duplicates detected in this corpus.",
+      icon: GitBranch,
+      tone: "text-blue-700 dark:text-blue-300",
+    },
+    {
+      label: "Review queue",
+      value: (candidateRecords.length + blockedInMasters).toLocaleString(),
+      detail:
+        candidateRecords.length + blockedInMasters > 0
+          ? "Needs human review before it becomes trusted evidence."
+          : "No OCR or duplicate-review blockers detected.",
+      icon: AlertTriangle,
+      tone:
+        candidateRecords.length + blockedInMasters > 0
+          ? "text-amber-700 dark:text-amber-300"
+          : "text-emerald-700 dark:text-emerald-300",
+    },
+    {
+      label: "Agent gate",
+      value: counts.failed === 0 && counts.active === 0 ? "Open" : "Guarded",
+      detail:
+        counts.failed === 0 && counts.active === 0
+          ? "Agents can run against trusted, processed records."
+          : "Agents stay blocked from incomplete or bad OCR.",
+      icon: Layers3,
+      tone:
+        counts.failed === 0 && counts.active === 0
+          ? "text-emerald-700 dark:text-emerald-300"
+          : "text-amber-700 dark:text-amber-300",
+    },
+  ];
   const masterByDocumentId = useMemo(() => {
     const map = new Map<number, MasterRecord>();
     masterRecords.forEach(record => {
@@ -389,36 +459,69 @@ export default function CorpusCenter() {
     <CommandSurface>
       <CommandTopBar title="Corpus Center" eyebrow="Evidence Intake" />
 
-      <CommandMain className="space-y-6">
-        <CommandHero
-          eyebrow="Evidence Intake"
-          title="Corpus Center"
-          description="Central evidence database. Upload, process, inspect OCR, fold duplicates, and keep agents away from files that are not ready."
-          icon={Database}
-        >
-          <div className="flex items-center gap-3">
+      <CommandMain className="space-y-4">
+        <section className="rounded-md border border-zinc-200 bg-white/72 px-4 py-3 shadow-sm backdrop-blur dark:border-white/10 dark:bg-[#0c1118]/72">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
+                Evidence intake
+              </p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-white">
+                Upload, process, dedupe, and block bad OCR before analysis.
+              </h2>
+            </div>
             <Badge
               variant="outline"
-              className="border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-emerald-700 dark:text-emerald-300"
+              className="w-fit border-emerald-500/50 bg-emerald-500/10 px-3 py-1.5 text-emerald-700 dark:text-emerald-300"
             >
-              {counts.completed}/{counts.all} Ready
+              {counts.completed}/{counts.all} ready
             </Badge>
           </div>
-        </CommandHero>
+        </section>
+        <WorkspaceCaseStrip />
+        <CommandWorkflowBar />
+
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {intakeQualityGates.map(gate => {
+            const Icon = gate.icon;
+            return (
+              <div
+                key={gate.label}
+                className="rounded-md border border-zinc-200 bg-white/78 p-3 shadow-sm dark:border-white/10 dark:bg-[#111722]/78"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-slate-500">
+                    {gate.label}
+                  </p>
+                  <Icon className={`h-4 w-4 shrink-0 ${gate.tone}`} />
+                </div>
+                <p
+                  className={`mt-3 break-words text-xl font-semibold tracking-tight sm:text-2xl ${gate.tone}`}
+                >
+                  {gate.value}
+                </p>
+                <p className="mt-2 hidden text-xs leading-5 text-zinc-600 dark:text-slate-400 xl:block">
+                  {gate.detail}
+                </p>
+              </div>
+            );
+          })}
+        </section>
 
         {/* Upload Section */}
-        <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84 backdrop-blur mb-6">
-          <CardHeader>
+        <Card className="mb-3 border-zinc-200 bg-white/78 backdrop-blur dark:border-white/10 dark:bg-[#111722]/78">
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
               <Upload className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
               Upload Evidence
             </CardTitle>
             <CardDescription>
-              Upload documents, audio, video, images - all formats supported
+              Upload documents, audio, video, and images. The trust layer starts
+              here: no empty OCR, no unanchored claims, no duplicate chaos.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border-2 border-dashed border-zinc-200 dark:border-white/10 rounded-lg p-8 text-center hover:border-zinc-400 dark:hover:border-white/25 transition-colors cursor-pointer">
+            <div className="cursor-pointer rounded-lg border border-dashed border-zinc-300 p-5 text-center transition-colors hover:border-zinc-500 dark:border-white/10 dark:hover:border-white/25">
               <input
                 type="file"
                 multiple
@@ -435,11 +538,11 @@ export default function CorpusCenter() {
                 }
               >
                 {uploadFile.isPending ? (
-                  <Loader2 className="w-12 h-12 text-emerald-700 dark:text-emerald-300 mx-auto mb-4 animate-spin" />
+                  <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-emerald-700 dark:text-emerald-300" />
                 ) : (
-                  <Upload className="w-12 h-12 text-emerald-700 dark:text-emerald-300 mx-auto mb-4" />
+                  <Upload className="mx-auto mb-3 h-9 w-9 text-emerald-700 dark:text-emerald-300" />
                 )}
-                <p className="text-lg font-semibold mb-2">
+                <p className="mb-1 text-base font-semibold">
                   {uploadFile.isPending
                     ? "Processing evidence..."
                     : "Click to upload or drag and drop"}
@@ -453,7 +556,7 @@ export default function CorpusCenter() {
         </Card>
 
         {/* Search and Filter */}
-        <div className="grid gap-4 mb-6 lg:grid-cols-[1fr_auto]">
+        <div className="mb-3 grid gap-3 lg:grid-cols-[1fr_auto]">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-600 dark:text-slate-400" />
             <Input
@@ -503,7 +606,7 @@ export default function CorpusCenter() {
         </div>
 
         {/* Master Structure Summary */}
-        <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
           <Card className="border-zinc-200 bg-white/82 dark:border-white/10 dark:bg-[#111722]/84">
             <CardContent className="p-4">
               <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500 dark:text-slate-500">

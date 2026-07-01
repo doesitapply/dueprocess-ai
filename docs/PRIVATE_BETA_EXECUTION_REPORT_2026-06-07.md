@@ -1,5 +1,7 @@
 # Private Beta Execution Report - 2026-06-07
 
+> Historical execution report. Use this as prior beta context only. Current implementation details should be verified against the code and current docs.
+
 Branch: `dueprocess-private-beta-hardening`
 
 ## Summary

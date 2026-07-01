@@ -29,7 +29,8 @@ async function summarizeExtractedText(extractedText: string): Promise<string> {
       messages: [
         {
           role: "system",
-          content: "You are a legal document summarizer. Provide a concise 2-3 sentence summary of the document.",
+          content:
+            "You are a legal document summarizer. Provide a concise 2-3 sentence summary of the document.",
         },
         {
           role: "user",
@@ -38,19 +39,26 @@ async function summarizeExtractedText(extractedText: string): Promise<string> {
       ],
     });
     const content = summaryResponse.choices[0]?.message?.content;
-    return typeof content === 'string' ? content : "";
+    return typeof content === "string" ? content : "";
   } catch (error) {
     console.error("Summary generation failed:", error);
     return "";
   }
 }
 
-function appendExtractionSummary(summary: string, extraction: ExtractionResult) {
+function appendExtractionSummary(
+  summary: string,
+  extraction: ExtractionResult
+) {
   const extractionSummary = [
     extraction.note || "",
     extraction.method ? `Extraction method: ${extraction.method}.` : "",
-    extraction.status === "failed" ? "Document saved, but it is not ready for agent analysis. Retry OCR or upload a cleaner copy." : "",
-  ].filter(Boolean).join(" ");
+    extraction.status === "failed"
+      ? "Document saved, but it is not ready for agent analysis. Retry OCR or upload a cleaner copy."
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   if (!summary && extractionSummary) return extractionSummary;
   if (summary && extractionSummary) return `${summary}\n\n${extractionSummary}`;
@@ -102,7 +110,9 @@ export const uploadRouter = router({
         .select()
         .from(documents)
         .where(eq(documents.userId, userId));
-      const duplicate = existingDocuments.find((document) => documentHasHash(document, documentHash));
+      const duplicate = existingDocuments.find(document =>
+        documentHasHash(document, documentHash)
+      );
       if (duplicate) {
         const diagnostics = analyzeExtractionDiagnostics(
           {
@@ -116,7 +126,8 @@ export const uploadRouter = router({
         const duplicateReady = isDocumentReadyForAnalysis({
           status: duplicate.status,
           extractedText: duplicate.extractedText,
-          documentHash: diagnostics.documentHash || duplicate.documentHash || documentHash,
+          documentHash:
+            diagnostics.documentHash || duplicate.documentHash || documentHash,
           extractionMethod: duplicate.extractionMethod || "duplicate",
           extractionQualityScore: diagnostics.qualityScore,
           extractionWarnings: duplicate.extractionWarnings,
@@ -125,6 +136,7 @@ export const uploadRouter = router({
           success: duplicateReady,
           extractionCompleted: duplicate.status === "completed",
           duplicate: true,
+          documentId: duplicate.id,
           existingDocumentId: duplicate.id,
           fileUrl: duplicate.fileUrl,
           documentHash: diagnostics.documentHash || documentHash,
@@ -147,7 +159,12 @@ export const uploadRouter = router({
       const { url: fileUrl } = await storagePut(fileKey, fileBuffer, mimeType);
 
       // Extract text content
-      let extraction = await extractTextContent(fileBuffer, mimeType, fileUrl, documentHash);
+      let extraction = await extractTextContent(
+        fileBuffer,
+        mimeType,
+        fileUrl,
+        documentHash
+      );
       let extractedText = extraction.text;
 
       // If audio/video, transcribe it
@@ -156,27 +173,40 @@ export const uploadRouter = router({
           const transcription = await transcribeAudio({
             audioUrl: fileUrl,
           });
-          if ('text' in transcription) {
-            const transcriptionText = withSourceAnchor(transcription.text, documentHash);
+          if ("text" in transcription) {
+            const transcriptionText = withSourceAnchor(
+              transcription.text,
+              documentHash
+            );
             extractedText = transcriptionText;
             extraction = {
               text: transcriptionText,
               method: "audio_transcription",
               status: transcriptionText ? "completed" : "failed",
-              note: transcriptionText ? undefined : "Audio/video transcription returned no usable text.",
+              note: transcriptionText
+                ? undefined
+                : "Audio/video transcription returned no usable text.",
             };
           }
         } catch (error) {
           console.error("Transcription failed:", error);
           extractedText = "";
-          extraction = failedExtraction("audio_transcription", error instanceof Error ? error.message : "Transcription failed.");
+          extraction = failedExtraction(
+            "audio_transcription",
+            error instanceof Error ? error.message : "Transcription failed."
+          );
         }
       }
 
       // Generate embedding for semantic search
-      const embedding = extractedText ? await generateEmbedding(extractedText) : [];
+      const embedding = extractedText
+        ? await generateEmbedding(extractedText)
+        : [];
       const embeddingJson = JSON.stringify(embedding);
-      const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
+      const diagnostics = analyzeExtractionDiagnostics(
+        extraction,
+        documentHash
+      );
       const extractionWarningsJson = JSON.stringify(diagnostics.warnings);
 
       // Generate summary using LLM
@@ -192,7 +222,7 @@ export const uploadRouter = router({
         extractionWarnings: extractionWarningsJson,
       });
 
-      await db.insert(documents).values({
+      const insertResult = await db.insert(documents).values({
         userId,
         fileName,
         fileUrl,
@@ -210,10 +240,12 @@ export const uploadRouter = router({
         summary,
         status: documentStatus,
       });
+      const insertedDocumentId = Number(insertResult[0].insertId);
 
       return {
         success: analysisReady,
         extractionCompleted: documentStatus === "completed",
+        documentId: insertedDocumentId,
         fileUrl,
         documentHash,
         status: documentStatus,
@@ -243,10 +275,16 @@ export const uploadRouter = router({
         throw new Error("Document not found");
       }
 
-      await db.update(documents).set({ status: "processing" }).where(eq(documents.id, document.id));
+      await db
+        .update(documents)
+        .set({ status: "processing" })
+        .where(eq(documents.id, document.id));
 
       try {
-        const fileBuffer = await fetchStoredFileBuffer(document.fileKey, document.fileUrl);
+        const fileBuffer = await fetchStoredFileBuffer(
+          document.fileKey,
+          document.fileUrl
+        );
         const documentHash = sha256(fileBuffer);
         const extraction = await extractTextContent(
           fileBuffer,
@@ -254,9 +292,14 @@ export const uploadRouter = router({
           document.fileUrl,
           documentHash
         );
-        const diagnostics = analyzeExtractionDiagnostics(extraction, documentHash);
+        const diagnostics = analyzeExtractionDiagnostics(
+          extraction,
+          documentHash
+        );
         const extractionWarningsJson = JSON.stringify(diagnostics.warnings);
-        const embedding = extraction.text ? await generateEmbedding(extraction.text) : [];
+        const embedding = extraction.text
+          ? await generateEmbedding(extraction.text)
+          : [];
         let summary = await summarizeExtractedText(extraction.text);
         summary = appendExtractionSummary(summary, extraction);
         const analysisReady = isDocumentReadyForAnalysis({
@@ -297,8 +340,14 @@ export const uploadRouter = router({
           summary,
         };
       } catch (error) {
-        const extraction = failedExtraction("retry_error", error instanceof Error ? error.message : "OCR retry failed.");
-        const diagnostics = analyzeExtractionDiagnostics(extraction, document.documentHash || null);
+        const extraction = failedExtraction(
+          "retry_error",
+          error instanceof Error ? error.message : "OCR retry failed."
+        );
+        const diagnostics = analyzeExtractionDiagnostics(
+          extraction,
+          document.documentHash || null
+        );
         await db
           .update(documents)
           .set({
@@ -308,7 +357,10 @@ export const uploadRouter = router({
             extractionQualityScore: diagnostics.qualityScore,
             extractionWarnings: JSON.stringify(diagnostics.warnings),
             status: "failed",
-            summary: appendExtractionSummary(document.summary || "", extraction),
+            summary: appendExtractionSummary(
+              document.summary || "",
+              extraction
+            ),
           })
           .where(eq(documents.id, document.id));
         return {
@@ -376,7 +428,7 @@ export const uploadRouter = router({
         .limit(limit);
 
       // Filter by text match (simple approach)
-      const filtered = results.filter((doc) => {
+      const filtered = results.filter(doc => {
         if (!doc.extractedText) return false;
         return doc.extractedText.toLowerCase().includes(query.toLowerCase());
       });

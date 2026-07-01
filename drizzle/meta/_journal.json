@@ -85,6 +85,20 @@
       "when": 1780836480000,
       "tag": "0011_document_extraction_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1782810000000,
+      "tag": "0012_workspace_cases",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1782902400000,
+      "tag": "0013_report_revisions",
+      "breakpoints": true
     }
   ]
 }

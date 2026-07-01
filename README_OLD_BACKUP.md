@@ -1,5 +1,7 @@
 # DueProcess AI: Evidence to Action
 
+> Archived backup. This file is retained for historical context and may describe older agent counts, deployment assumptions, and pricing. Use `README.md`, `docs/TECHNICAL_SPECIFICATION.md`, and `server/products.ts` for the current app.
+
 **Where Legal Proceedings Go to Get Resurrected**
 
 DueProcess AI is an AI-powered legal warfare platform designed to empower pro se litigants, civil rights activists, and legal researchers in their fight against institutional corruption. The system deploys fifteen specialized AI agents across six tactical sectors to analyze evidence, identify patterns of misconduct, pierce immunity defenses, and generate court-ready legal documents with full citations and step-by-step reasoning.

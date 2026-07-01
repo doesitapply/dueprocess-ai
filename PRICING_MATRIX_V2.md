@@ -1,5 +1,7 @@
 # DueProcess AI - Complete Pricing Matrix 2.0
 
+> Archived pricing matrix. Current pricing is defined in `server/products.ts` and summarized in `README.md` and `docs/DOCUMENTATION_INDEX.md`.
+
 ## Overview
 
 This document provides a complete view of the aggressive, future-proofed pricing model across all three phases.

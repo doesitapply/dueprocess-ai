@@ -1,5 +1,7 @@
 # CONFIDENTIAL: DueProcess AI Phased Pricing Strategy 2.0
 
+> Archived internal pricing strategy. It is preserved for context only. Current product tiers and Stripe env mappings live in `server/products.ts`.
+
 ## Document Purpose
 
 This document outlines the aggressive, future-proofed multi-phase pricing strategy for DueProcess AI. This is the internal "war binder" that defines pricing, phase transitions, and strategic justifications for each stage of market penetration.

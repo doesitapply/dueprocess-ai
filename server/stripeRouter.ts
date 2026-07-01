@@ -1,19 +1,23 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
 import Stripe from "stripe";
-import {
-  PLATFORM_SUBSCRIPTIONS,
-  type SubscriptionTier
-} from "./products";
+import { PLATFORM_SUBSCRIPTIONS, type SubscriptionTier } from "./products";
 import {
   getSubscriptionByUserId,
   upsertSubscription,
   getUserPayments,
-  createPayment
+  createPayment,
 } from "./db";
 
-function hasAdminAccess(user: { role?: string | null; openId?: string | null }) {
-  return Boolean(process.env.OWNER_OPEN_ID && user.openId === process.env.OWNER_OPEN_ID && user.role === "admin");
+function hasAdminAccess(user: {
+  role?: string | null;
+  openId?: string | null;
+}) {
+  return Boolean(
+    process.env.OWNER_OPEN_ID &&
+      user.openId === process.env.OWNER_OPEN_ID &&
+      user.role === "admin"
+  );
 }
 
 function getStripeClient() {
@@ -23,14 +27,16 @@ function getStripeClient() {
   }
 
   return new Stripe(secretKey, {
-    apiVersion: "2025-10-29.clover",
+    apiVersion: "2026-06-24.dahlia",
   });
 }
 
-const checkoutPlanSchema = z.enum(["free", "advocate", "litigator", "firm"] satisfies [
-  SubscriptionTier,
-  ...SubscriptionTier[],
-]);
+const checkoutPlanSchema = z.enum([
+  "free",
+  "advocate",
+  "litigator",
+  "firm",
+] satisfies [SubscriptionTier, ...SubscriptionTier[]]);
 
 export const stripeRouter = router({
   // Get user's current subscription
@@ -50,9 +56,11 @@ export const stripeRouter = router({
 
   // Create Stripe Checkout Session
   createCheckoutSession: protectedProcedure
-    .input(z.object({
-      planId: checkoutPlanSchema,
-    }))
+    .input(
+      z.object({
+        planId: checkoutPlanSchema,
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const plan = PLATFORM_SUBSCRIPTIONS[input.planId];
 
@@ -61,7 +69,9 @@ export const stripeRouter = router({
       }
 
       if (plan.billingModel === "usage") {
-        throw new Error("Firm is usage-based. Contact support to configure metered billing.");
+        throw new Error(
+          "Firm is usage-based. Contact support to configure metered billing."
+        );
       }
 
       if (
@@ -72,7 +82,9 @@ export const stripeRouter = router({
           "price_firm_monthly",
         ].includes(plan.priceId)
       ) {
-        throw new Error("Stripe Price ID not configured. Please set up products in Stripe Dashboard first.");
+        throw new Error(
+          "Stripe Price ID not configured. Please set up products in Stripe Dashboard first."
+        );
       }
 
       const origin = ctx.req.headers.origin || "http://localhost:3000";

@@ -1,6 +1,19 @@
 import mysql from "mysql2/promise";
 import { protectedProcedure, router } from "./_core/trpc";
-import { getAgentOutputsByDocumentIds, getLlmUsageEventsByUserId, getUserDocuments } from "./db";
+import {
+  getAgentRunsByUserId,
+  getAgentOutputsByDocumentIds,
+  getGeneratedReportsByUserId,
+  getLlmUsageEventsByUserId,
+  getSubscriptionByUserId,
+  getUserDocuments,
+} from "./db";
+import {
+  COMPUTE_PACKS,
+  PLATFORM_SUBSCRIPTIONS,
+  type SubscriptionTier,
+} from "./products";
+import { buildUsageSnapshot } from "./usageSnapshot";
 
 type CountRow = { count: number | string };
 type UsageTrackingRow = {
@@ -29,6 +42,39 @@ type ChatUsageRow = {
   chars: number | string | null;
 };
 
+const PLACEHOLDER_PRICE_IDS = new Set([
+  "price_advocate_monthly",
+  "price_advocate_founder_monthly",
+  "price_litigator_monthly",
+  "price_litigator_founder_monthly",
+  "price_firm_monthly",
+  "price_firm_founder_monthly",
+  "price_case_burst",
+  "price_trial_prep",
+  "price_full_discovery",
+]);
+
+function hasAdminAccess(user: {
+  role?: string | null;
+  openId?: string | null;
+}) {
+  return Boolean(
+    process.env.OWNER_OPEN_ID &&
+      user.openId === process.env.OWNER_OPEN_ID &&
+      user.role === "admin"
+  );
+}
+
+function isConfiguredStripePrice(priceId: string | null | undefined) {
+  return Boolean(priceId && !PLACEHOLDER_PRICE_IDS.has(priceId));
+}
+
+function formatLimitValue(value: number | string) {
+  if (value === "unlimited") return "Unlimited";
+  if (value === "metered") return "Metered";
+  return String(value);
+}
+
 function estimateTokensFromText(value: string): number {
   return Math.ceil(value.length / 4);
 }
@@ -47,7 +93,12 @@ async function getRawConnection() {
   });
 }
 
-async function safeCount(connection: mysql.Connection, tableName: string, userIdColumn: string, userId: number) {
+async function safeCount(
+  connection: mysql.Connection,
+  tableName: string,
+  userIdColumn: string,
+  userId: number
+) {
   try {
     const [rows] = await connection.query<mysql.RowDataPacket[]>(
       `SELECT COUNT(*) AS count FROM \`${tableName}\` WHERE \`${userIdColumn}\` = ?`,
@@ -62,8 +113,81 @@ async function safeCount(connection: mysql.Connection, tableName: string, userId
 export const settingsRouter = router({
   overview: protectedProcedure.query(async ({ ctx }) => {
     const documents = await getUserDocuments(ctx.user.id);
-    const outputs = await getAgentOutputsByDocumentIds(documents.map((document) => document.id));
-    const readyDocuments = documents.filter((document) => document.status === "completed" && document.extractedText?.trim()).length;
+    const outputs = await getAgentOutputsByDocumentIds(
+      documents.map(document => document.id)
+    );
+    const readyDocuments = documents.filter(
+      document =>
+        document.status === "completed" && document.extractedText?.trim()
+    ).length;
+    const subscription = await getSubscriptionByUserId(ctx.user.id);
+    const adminOverride = hasAdminAccess(ctx.user);
+    const activePlanId = (
+      adminOverride
+        ? "firm"
+        : subscription?.status === "active"
+          ? subscription.plan
+          : "free"
+    ) as SubscriptionTier;
+    const effectivePlan =
+      PLATFORM_SUBSCRIPTIONS[activePlanId] ?? PLATFORM_SUBSCRIPTIONS.free;
+    const paidPlanReadiness = Object.values(PLATFORM_SUBSCRIPTIONS)
+      .filter(plan => plan.id !== "free")
+      .map(plan => ({
+        id: plan.id,
+        name: plan.name,
+        price: plan.price,
+        founderPrice: plan.founderPrice ?? null,
+        billingModel: plan.billingModel ?? "subscription",
+        priceIdConfigured: isConfiguredStripePrice(plan.priceId),
+        founderPriceIdConfigured: isConfiguredStripePrice(plan.founderPriceId),
+        checkoutReady:
+          (plan.billingModel ?? "subscription") === "subscription" &&
+          isConfiguredStripePrice(plan.priceId),
+      }));
+    const computePackReadiness = Object.values(COMPUTE_PACKS).map(pack => ({
+      id: pack.id,
+      name: pack.name,
+      price: pack.price,
+      pages: pack.pages,
+      agentRuns: pack.agentRuns,
+      priceIdConfigured: isConfiguredStripePrice(pack.priceId),
+    }));
+
+    const revenueBlockers = [
+      !process.env.STRIPE_SECRET_KEY
+        ? "Stripe secret is missing; checkout cannot run."
+        : null,
+      !process.env.STRIPE_WEBHOOK_SECRET
+        ? "Stripe webhook secret is missing; subscriptions cannot be trusted after checkout."
+        : null,
+      !process.env.VITE_STRIPE_PUBLISHABLE_KEY
+        ? "Stripe publishable key is missing; browser checkout entry points may fail."
+        : null,
+      paidPlanReadiness.some(
+        plan => plan.billingModel === "subscription" && !plan.priceIdConfigured
+      )
+        ? "At least one subscription plan still has a placeholder Stripe price ID."
+        : null,
+      computePackReadiness.some(pack => !pack.priceIdConfigured)
+        ? "At least one compute pack still has a placeholder Stripe price ID."
+        : null,
+      paidPlanReadiness.some(plan => plan.billingModel === "usage")
+        ? "Firm usage billing is priced, but checkout is intentionally manual until metered billing is wired."
+        : null,
+    ].filter((item): item is string => Boolean(item));
+
+    const revenueChecks = [
+      Boolean(process.env.STRIPE_SECRET_KEY),
+      Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      Boolean(process.env.VITE_STRIPE_PUBLISHABLE_KEY),
+      paidPlanReadiness
+        .filter(plan => plan.billingModel === "subscription")
+        .every(plan => plan.priceIdConfigured),
+      computePackReadiness.every(pack => pack.priceIdConfigured),
+      paidPlanReadiness.some(plan => plan.billingModel === "usage"),
+    ];
+    const revenueReadyChecks = revenueChecks.filter(Boolean).length;
 
     let dbReachable = false;
     let exportJobs = 0;
@@ -74,8 +198,18 @@ export const settingsRouter = router({
       try {
         await connection.query("SELECT 1");
         dbReachable = true;
-        exportJobs = await safeCount(connection, "export_jobs", "userId", ctx.user.id);
-        conversations = await safeCount(connection, "chatConversations", "userId", ctx.user.id);
+        exportJobs = await safeCount(
+          connection,
+          "export_jobs",
+          "userId",
+          ctx.user.id
+        );
+        conversations = await safeCount(
+          connection,
+          "chatConversations",
+          "userId",
+          ctx.user.id
+        );
       } finally {
         await connection.end();
       }
@@ -93,8 +227,13 @@ export const settingsRouter = router({
       inventory: {
         documents: documents.length,
         readyDocuments,
-        processingDocuments: documents.filter((document) => document.status === "pending" || document.status === "processing").length,
-        failedDocuments: documents.filter((document) => document.status === "failed").length,
+        processingDocuments: documents.filter(
+          document =>
+            document.status === "pending" || document.status === "processing"
+        ).length,
+        failedDocuments: documents.filter(
+          document => document.status === "failed"
+        ).length,
         savedAgentOutputs: outputs.length,
         exportJobs,
         conversations,
@@ -103,27 +242,120 @@ export const settingsRouter = router({
         database: dbReachable,
         openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
-        pineconeConfigured: Boolean(process.env.PINECONE_API_KEY && process.env.PINECONE_HOST),
+        pineconeConfigured: Boolean(
+          process.env.PINECONE_API_KEY && process.env.PINECONE_HOST
+        ),
         storageConfigured: true,
       },
       limits: {
         uploadRequestLimitMb: 100,
         reliableRawFileLimitMb: 50,
       },
+      commercial: {
+        effectivePlan: {
+          id: effectivePlan.id,
+          name: effectivePlan.name,
+          description: effectivePlan.description,
+          status: subscription?.status ?? (adminOverride ? "active" : "active"),
+          adminOverride,
+          billingModel: effectivePlan.billingModel ?? "subscription",
+          price: effectivePlan.price,
+          founderPrice: effectivePlan.founderPrice ?? null,
+          support: effectivePlan.support,
+          access: {
+            agentAccess: effectivePlan.agentAccess,
+            drafting: effectivePlan.includesDrafting,
+            pdfExport: effectivePlan.includesPdfExport,
+            precedentSearch: effectivePlan.includesPrecedentSearch,
+            apiAccess: effectivePlan.includesApiAccess,
+            swarmProcessing: effectivePlan.includesSwarmProcessing,
+          },
+          limits: {
+            cases: formatLimitValue(effectivePlan.limits.cases),
+            documentUploads: formatLimitValue(
+              effectivePlan.limits.documentUploads
+            ),
+            pagesAnalyzed: formatLimitValue(effectivePlan.limits.pagesAnalyzed),
+            chatMessages: formatLimitValue(effectivePlan.limits.chatMessages),
+          },
+        },
+        revenueReadiness: {
+          readyChecks: revenueReadyChecks,
+          totalChecks: revenueChecks.length,
+          checkoutReadyPlans: paidPlanReadiness.filter(
+            plan => plan.checkoutReady
+          ).length,
+          subscriptionPlans: paidPlanReadiness.filter(
+            plan => plan.billingModel === "subscription"
+          ).length,
+          computePacksConfigured: computePackReadiness.filter(
+            pack => pack.priceIdConfigured
+          ).length,
+          computePacksTotal: computePackReadiness.length,
+          blockers: revenueBlockers,
+        },
+        paidPlanReadiness,
+        computePackReadiness,
+      },
     };
   }),
 
   usage: protectedProcedure.query(async ({ ctx }) => {
     const documents = await getUserDocuments(ctx.user.id);
-    const outputs = await getAgentOutputsByDocumentIds(documents.map((document) => document.id));
+    const outputs = await getAgentOutputsByDocumentIds(
+      documents.map(document => document.id)
+    );
     const usageEvents = await getLlmUsageEventsByUserId(ctx.user.id);
-    const byAgent = new Map<string, { outputs: number; characters: number; estimatedTokens: number; estimatedUsd: number }>();
-    const exactByOperation = new Map<string, { calls: number; promptTokens: number; completionTokens: number; totalTokens: number; estimatedUsd: number }>();
+    const agentRuns = await getAgentRunsByUserId(ctx.user.id);
+    const generatedReports = await getGeneratedReportsByUserId(ctx.user.id);
+    const storedSubscription = await getSubscriptionByUserId(ctx.user.id);
+    const adminOverride = hasAdminAccess(ctx.user);
+    const activePlanId = (
+      adminOverride
+        ? "firm"
+        : storedSubscription?.status === "active"
+          ? storedSubscription.plan
+          : "free"
+    ) as SubscriptionTier;
+    const effectivePlan =
+      PLATFORM_SUBSCRIPTIONS[activePlanId] ?? PLATFORM_SUBSCRIPTIONS.free;
+    const usageSnapshot = buildUsageSnapshot({
+      plan: effectivePlan,
+      subscription: storedSubscription ?? null,
+      documents,
+      agentRuns,
+      reports: generatedReports,
+      usageEvents,
+    });
+    const byAgent = new Map<
+      string,
+      {
+        outputs: number;
+        characters: number;
+        estimatedTokens: number;
+        estimatedUsd: number;
+      }
+    >();
+    const exactByOperation = new Map<
+      string,
+      {
+        calls: number;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+        estimatedUsd: number;
+      }
+    >();
 
-    outputs.forEach((output) => {
+    outputs.forEach(output => {
       const name = output.agentName || output.agentId || "Unknown agent";
       const text = output.output || "";
-      const current = byAgent.get(name) ?? { outputs: 0, characters: 0, estimatedTokens: 0, estimatedUsd: 0 };
+      const current = byAgent.get(name) ?? {
+        outputs: 0,
+        characters: 0,
+        estimatedTokens: 0,
+        estimatedUsd: 0,
+      };
       current.outputs += 1;
       current.characters += text.length;
       current.estimatedTokens += estimateTokensFromText(text);
@@ -131,9 +363,15 @@ export const settingsRouter = router({
       byAgent.set(name, current);
     });
 
-    usageEvents.forEach((event) => {
+    usageEvents.forEach(event => {
       const key = event.operation || "unknown";
-      const current = exactByOperation.get(key) ?? { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, estimatedUsd: 0 };
+      const current = exactByOperation.get(key) ?? {
+        calls: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedUsd: 0,
+      };
       current.calls += 1;
       current.promptTokens += event.promptTokens;
       current.completionTokens += event.completionTokens;
@@ -145,7 +383,12 @@ export const settingsRouter = router({
     let usageTracking: UsageTrackingRow | null = null;
     let subscription: SubscriptionRow | null = null;
     let subscriptionLimit: SubscriptionLimitRow | null = null;
-    let chat: { messages: number; characters: number; estimatedTokens: number; estimatedUsd: number } = {
+    let chat: {
+      messages: number;
+      characters: number;
+      estimatedTokens: number;
+      estimatedUsd: number;
+    } = {
       messages: 0,
       characters: 0,
       estimatedTokens: 0,
@@ -162,18 +405,22 @@ export const settingsRouter = router({
         );
         usageTracking = (usageRows[0] as UsageTrackingRow | undefined) ?? null;
 
-        const [subscriptionRows] = await connection.query<mysql.RowDataPacket[]>(
+        const [subscriptionRows] = await connection.query<
+          mysql.RowDataPacket[]
+        >(
           "SELECT plan, status FROM subscriptions WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1",
           [ctx.user.id]
         );
-        subscription = (subscriptionRows[0] as SubscriptionRow | undefined) ?? null;
+        subscription =
+          (subscriptionRows[0] as SubscriptionRow | undefined) ?? null;
 
         if (subscription?.plan) {
           const [limitRows] = await connection.query<mysql.RowDataPacket[]>(
             "SELECT plan, pagesPerMonth, swarmsPerMonth, maxCases FROM subscription_limits WHERE plan = ? LIMIT 1",
             [subscription.plan]
           );
-          subscriptionLimit = (limitRows[0] as SubscriptionLimitRow | undefined) ?? null;
+          subscriptionLimit =
+            (limitRows[0] as SubscriptionLimitRow | undefined) ?? null;
         }
 
         const [chatRows] = await connection.query<mysql.RowDataPacket[]>(
@@ -197,7 +444,7 @@ export const settingsRouter = router({
           "SELECT status, COUNT(*) AS count FROM export_jobs WHERE userId = ? GROUP BY status",
           [ctx.user.id]
         );
-        exportJobs = exportRows.map((row) => ({
+        exportJobs = exportRows.map(row => ({
           status: String(row.status),
           count: row.count,
         }));
@@ -208,41 +455,62 @@ export const settingsRouter = router({
       }
     }
 
-    const outputTokens = Array.from(byAgent.values()).reduce((sum, item) => sum + item.estimatedTokens, 0);
-    const exactTotalTokens = usageEvents.reduce((sum, event) => sum + event.totalTokens, 0);
-    const exactTotalCostCents = usageEvents.reduce((sum, event) => sum + event.estimatedCostCents, 0);
+    const outputTokens = Array.from(byAgent.values()).reduce(
+      (sum, item) => sum + item.estimatedTokens,
+      0
+    );
+    const exactTotalTokens = usageEvents.reduce(
+      (sum, event) => sum + event.totalTokens,
+      0
+    );
+    const exactTotalCostCents = usageEvents.reduce(
+      (sum, event) => sum + event.estimatedCostCents,
+      0
+    );
 
     return {
       billing: {
-        subscription,
+        subscription: subscription ?? storedSubscription,
         limit: subscriptionLimit,
         usage: usageTracking,
+        snapshot: usageSnapshot,
       },
       aiUsage: {
         exactTokenTelemetryEnabled: usageEvents.length > 0,
-        note: usageEvents.length > 0
-          ? "Exact LLM token telemetry is persisted for new leverage-engine and report-generation runs. Legacy saved outputs remain estimated from text volume."
-          : "No exact LLM usage events have been stored yet. Token and cost values below are estimates from stored text volume until a new leverage-engine run completes.",
+        note:
+          usageEvents.length > 0
+            ? "Exact LLM token telemetry is persisted for new leverage-engine and report-generation runs. Legacy saved outputs remain estimated from text volume."
+            : "No exact LLM usage events have been stored yet. Token and cost values below are estimates from stored text volume until a new leverage-engine run completes.",
         exact: {
           calls: usageEvents.length,
-          promptTokens: usageEvents.reduce((sum, event) => sum + event.promptTokens, 0),
-          completionTokens: usageEvents.reduce((sum, event) => sum + event.completionTokens, 0),
+          promptTokens: usageEvents.reduce(
+            (sum, event) => sum + event.promptTokens,
+            0
+          ),
+          completionTokens: usageEvents.reduce(
+            (sum, event) => sum + event.completionTokens,
+            0
+          ),
           totalTokens: exactTotalTokens,
           estimatedUsd: Number((exactTotalCostCents / 100).toFixed(4)),
-          byOperation: Array.from(exactByOperation.entries()).map(([operation, metrics]) => ({
-            operation,
-            ...metrics,
-            estimatedUsd: Number(metrics.estimatedUsd.toFixed(4)),
-          })),
+          byOperation: Array.from(exactByOperation.entries()).map(
+            ([operation, metrics]) => ({
+              operation,
+              ...metrics,
+              estimatedUsd: Number(metrics.estimatedUsd.toFixed(4)),
+            })
+          ),
         },
         savedAgentOutputs: {
           outputs: outputs.length,
           estimatedTokens: outputTokens,
           estimatedUsd: estimateUsd(outputTokens),
-          byAgent: Array.from(byAgent.entries()).map(([agentName, metrics]) => ({
-            agentName,
-            ...metrics,
-          })),
+          byAgent: Array.from(byAgent.entries()).map(
+            ([agentName, metrics]) => ({
+              agentName,
+              ...metrics,
+            })
+          ),
         },
         chat,
       },
@@ -252,17 +520,29 @@ export const settingsRouter = router({
 
   monitors: protectedProcedure.query(async ({ ctx }) => {
     const documents = await getUserDocuments(ctx.user.id);
-    const outputs = await getAgentOutputsByDocumentIds(documents.map((document) => document.id));
-    const processingDocuments = documents.filter((document) => document.status === "pending" || document.status === "processing").length;
-    const failedDocuments = documents.filter((document) => document.status === "failed").length;
-    const readyDocuments = documents.filter((document) => document.status === "completed" && document.extractedText?.trim()).length;
+    const outputs = await getAgentOutputsByDocumentIds(
+      documents.map(document => document.id)
+    );
+    const processingDocuments = documents.filter(
+      document =>
+        document.status === "pending" || document.status === "processing"
+    ).length;
+    const failedDocuments = documents.filter(
+      document => document.status === "failed"
+    ).length;
+    const readyDocuments = documents.filter(
+      document =>
+        document.status === "completed" && document.extractedText?.trim()
+    ).length;
 
     const checks = [
       {
         id: "database",
         name: "Database connection",
         status: process.env.DATABASE_URL ? "ok" : "error",
-        detail: process.env.DATABASE_URL ? "DATABASE_URL is configured and app queries are active." : "DATABASE_URL is missing.",
+        detail: process.env.DATABASE_URL
+          ? "DATABASE_URL is configured and app queries are active."
+          : "DATABASE_URL is missing.",
       },
       {
         id: "corpus",
@@ -280,19 +560,24 @@ export const settingsRouter = router({
         id: "openai",
         name: "OpenAI API key",
         status: process.env.OPENAI_API_KEY ? "ok" : "error",
-        detail: process.env.OPENAI_API_KEY ? "Configured." : "Missing OPENAI_API_KEY.",
+        detail: process.env.OPENAI_API_KEY
+          ? "Configured."
+          : "Missing OPENAI_API_KEY.",
       },
       {
         id: "stripe",
         name: "Stripe billing",
         status: process.env.STRIPE_SECRET_KEY ? "ok" : "warn",
-        detail: process.env.STRIPE_SECRET_KEY ? "Stripe secret configured." : "Stripe secret missing.",
+        detail: process.env.STRIPE_SECRET_KEY
+          ? "Stripe secret configured."
+          : "Stripe secret missing.",
       },
       {
         id: "cost-telemetry",
         name: "Exact token telemetry",
         status: outputs.length > 0 ? "ok" : "warn",
-        detail: "New leverage-engine and report-generation runs persist provider token metadata into llm_usage_events.",
+        detail:
+          "New leverage-engine and report-generation runs persist provider token metadata into llm_usage_events.",
       },
     ];
 

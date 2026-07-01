@@ -1,9 +1,13 @@
 # DueProcess AI - Investor Pitch Deck
+
+> Strategic draft. This investor-pitch outline preserves older market and product framing. Refresh against `README.md`, `docs/MARKET_CUSTOMER_BASES.md`, `server/products.ts`, and `server/agentConfig.ts` before sending externally.
+
 ## AI-Powered Legal Warfare: Democratizing Civil Rights Enforcement
 
 ---
 
 ## Slide 1: Title Slide
+
 **DueProcess AI**
 **Defeating Qualified Immunity Through Pattern Recognition**
 
@@ -41,7 +45,7 @@ Transforming civil rights litigation with 15 specialized AI agents that identify
 
 ## Slide 4: The DueProcess AI Solution
 
-**15 Specialized AI Agents Organized Across 6 Tactical Sectors**:
+**16 Specialized AI Agents Organized Across 5 Legal-Analysis Divisions Plus Corpus**:
 
 **Tactical Ops (Red)**: Immunity Piercer defeats qualified/absolute/prosecutorial immunity. Abstention Destroyer overcomes Younger, Rooker-Feldman, Colorado River. Discovery Tactician extracts evidence through aggressive interrogatories and document requests.
 
@@ -132,11 +136,13 @@ Transforming civil rights litigation with 15 specialized AI agents that identify
 ## Slide 10: Team & Traction
 
 **Founding Team**:
+
 - **AI/Legal Tech Expertise**: Built by Manus AI with deep experience in LLM applications, legal document analysis, and civil rights litigation strategy.
 - **Technical Architecture**: Full-stack TypeScript application with production-ready infrastructure, database schema, authentication, payment processing, and deployment pipelines.
 - **Domain Knowledge**: System prompts encode specialized knowledge of qualified immunity exceptions, abstention bypass strategies, discovery warfare tactics, and pattern recognition methodologies.
 
 **Current Traction**:
+
 - **15 specialized AI agents** operational across 6 tactical sectors
 - **Swarm processing** enables parallel multi-agent execution
 - **Complete technical stack** with React 19, tRPC, Drizzle ORM, Stripe integration
@@ -144,6 +150,7 @@ Transforming civil rights litigation with 15 specialized AI agents that identify
 - **Production-ready platform** with authentication, file storage, database, payment processing
 
 **Roadmap**:
+
 - **Q1 2026**: Launch free tier, onboard first 1,000 users, validate product-market fit
 - **Q2 2026**: Launch professional tier, partner with 10 legal aid clinics, reach $50K MRR
 - **Q3 2026**: Launch enterprise tier, integrate CourtListener API, implement vector search/RAG
@@ -154,12 +161,14 @@ Transforming civil rights litigation with 15 specialized AI agents that identify
 ## Slide 11: The Ask - $2M Seed Round
 
 **Use of Funds**:
+
 - **Product Development (40% - $800K)**: Vector search/RAG implementation, CourtListener API integration, PDF OCR extraction, collaborative features, mobile app development
 - **Go-to-Market (35% - $700K)**: Content marketing, SEO, legal tech conference sponsorships, legal aid partnerships, viral content campaigns
 - **Team Expansion (20% - $400K)**: Hire 2 full-stack engineers, 1 legal domain expert, 1 growth marketer, 1 customer success manager
 - **Operations (5% - $100K)**: Infrastructure costs, legal compliance, accounting, insurance
 
 **Milestones**:
+
 - **6 months**: 10,000 free users, 500 professional subscribers, $25K MRR, product-market fit validation
 - **12 months**: 50,000 free users, 2,500 professional subscribers, 20 enterprise customers, $150K MRR, Series A readiness
 - **18 months**: 100,000 free users, 5,000 professional subscribers, 50 enterprise customers, $300K MRR, profitability
@@ -192,6 +201,7 @@ Transforming civil rights litigation with 15 specialized AI agents that identify
 **GitHub**: [Your repository]
 
 **Investor Materials**:
+
 - Whitepaper: "AI-Powered Legal Warfare: A New Paradigm for Civil Rights Litigation"
 - Technical Specification: Complete system architecture and implementation details
 - User Guide: Comprehensive documentation for all 15 agents and 6 tactical sectors

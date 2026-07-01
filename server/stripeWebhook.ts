@@ -1,6 +1,10 @@
 import express from "express";
 import Stripe from "stripe";
-import { upsertSubscription, updatePaymentStatus, getSubscriptionByStripeId } from "./db";
+import {
+  upsertSubscription,
+  updatePaymentStatus,
+  getSubscriptionByStripeId,
+} from "./db";
 import { getSubscriptionByPriceId } from "./products";
 
 function getStripeClient() {
@@ -10,7 +14,7 @@ function getStripeClient() {
   }
 
   return new Stripe(secretKey, {
-    apiVersion: "2025-10-29.clover",
+    apiVersion: "2026-06-24.dahlia",
   });
 }
 
@@ -37,7 +41,9 @@ export function setupStripeWebhook(app: express.Application) {
           process.env.STRIPE_WEBHOOK_SECRET || ""
         );
       } catch (err: any) {
-        console.error(`[Stripe Webhook] Signature verification failed: ${err.message}`);
+        console.error(
+          `[Stripe Webhook] Signature verification failed: ${err.message}`
+        );
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
@@ -57,15 +63,18 @@ export function setupStripeWebhook(app: express.Application) {
 
             // Handle subscription creation
             if (session.mode === "subscription" && session.subscription) {
-              const subscriptionId = typeof session.subscription === "string"
-                ? session.subscription
-                : session.subscription.id;
+              const subscriptionId =
+                typeof session.subscription === "string"
+                  ? session.subscription
+                  : session.subscription.id;
 
-              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const subscription =
+                await stripe.subscriptions.retrieve(subscriptionId);
               const userId = parseInt(session.metadata?.user_id || "0", 10);
               const stripePriceId = subscription.items.data[0].price.id;
               const purchasedPlan = getSubscriptionByPriceId(stripePriceId);
-              const planId = purchasedPlan?.id || session.metadata?.plan_id || "pro";
+              const planId =
+                purchasedPlan?.id || session.metadata?.plan_id || "pro";
 
               if (userId > 0) {
                 await upsertSubscription({
@@ -75,11 +84,17 @@ export function setupStripeWebhook(app: express.Application) {
                   stripePriceId,
                   plan: planId as any,
                   status: "active",
-                  currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                  currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                  currentPeriodStart: new Date(
+                    (subscription as any).current_period_start * 1000
+                  ),
+                  currentPeriodEnd: new Date(
+                    (subscription as any).current_period_end * 1000
+                  ),
                   cancelAtPeriodEnd: subscription.cancel_at_period_end ? 1 : 0,
                 });
-                console.log(`[Stripe] Updated user ${userId} to plan ${planId}`);
+                console.log(
+                  `[Stripe] Updated user ${userId} to plan ${planId}`
+                );
               }
             }
             break;
@@ -89,7 +104,9 @@ export function setupStripeWebhook(app: express.Application) {
             const subscription = event.data.object as Stripe.Subscription;
             console.log("[Stripe] Subscription updated:", subscription.id);
 
-            const existingSub = await getSubscriptionByStripeId(subscription.id);
+            const existingSub = await getSubscriptionByStripeId(
+              subscription.id
+            );
             if (existingSub) {
               await upsertSubscription({
                 userId: existingSub.userId,
@@ -97,12 +114,19 @@ export function setupStripeWebhook(app: express.Application) {
                 stripeSubscriptionId: subscription.id,
                 stripePriceId: subscription.items.data[0].price.id,
                 plan: existingSub.plan,
-                status: subscription.status === "active" ? "active" : "canceled",
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                status:
+                  subscription.status === "active" ? "active" : "canceled",
+                currentPeriodStart: new Date(
+                  (subscription as any).current_period_start * 1000
+                ),
+                currentPeriodEnd: new Date(
+                  (subscription as any).current_period_end * 1000
+                ),
                 cancelAtPeriodEnd: subscription.cancel_at_period_end ? 1 : 0,
               });
-              console.log(`[Stripe] Subscription updated for user ${existingSub.userId}`);
+              console.log(
+                `[Stripe] Subscription updated for user ${existingSub.userId}`
+              );
             }
             break;
           }
@@ -111,7 +135,9 @@ export function setupStripeWebhook(app: express.Application) {
             const subscription = event.data.object as Stripe.Subscription;
             console.log("[Stripe] Subscription deleted:", subscription.id);
 
-            const existingSub = await getSubscriptionByStripeId(subscription.id);
+            const existingSub = await getSubscriptionByStripeId(
+              subscription.id
+            );
             if (existingSub) {
               await upsertSubscription({
                 userId: existingSub.userId,
@@ -124,7 +150,9 @@ export function setupStripeWebhook(app: express.Application) {
                 currentPeriodEnd: existingSub.currentPeriodEnd,
                 cancelAtPeriodEnd: 1,
               });
-              console.log(`[Stripe] Subscription canceled for user ${existingSub.userId}`);
+              console.log(
+                `[Stripe] Subscription canceled for user ${existingSub.userId}`
+              );
             }
             break;
           }

@@ -1,5 +1,7 @@
 # Auth & Billing Release Gate Report
 
+> Historical gate report. This documents the 2026-06-01 auth/billing state and may be stale. Re-run the current verification gates and Stripe lifecycle checks before using it as a release decision.
+
 Date: 2026-06-01
 
 Scope: targeted execution of release checklist Section 8, Authentication & Access Control, and Section 9, Stripe & Billing.
@@ -23,25 +25,25 @@ Section 9 is partially blocked. Stripe webhook signature verification passes, bu
 
 ## Section 8 - Authentication & Access Control
 
-| Item | Status | Evidence |
-|---|---|---|
-| 8.1 Unauthenticated access | Pass | `documents.list` without cookie returned HTTP `401` with `UNAUTHORIZED`. |
-| 8.2 Cross-user document read | Pass | User B could not read User A's document; route returned `Document not found`. |
-| 8.2 Cross-user document delete | Pass | User B could not delete User A's document; route returned `Document not found`. |
-| 8.4 Admin-only routes | Pass | Non-owner user created through `upsertUser` with requested admin role was stored as `user` and received `FORBIDDEN`. |
-| 8.4 Forced admin row | Pass | A synthetic non-owner DB row with `role = admin` still received `FORBIDDEN` because admin access also requires `OWNER_OPEN_ID`. |
-| Existing non-owner admin rows | Pass | Query returned no non-owner users with `role = admin` after test cleanup. |
-| Owner/admin override | Pass | Configured owner with admin role receives active `firm` access with `adminOverride: true`. |
-| Local auth public exposure | Pass | `/api/auth/login` succeeds on `localhost`; same route with non-loopback host returned `403`. |
+| Item                           | Status | Evidence                                                                                                                        |
+| ------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 8.1 Unauthenticated access     | Pass   | `documents.list` without cookie returned HTTP `401` with `UNAUTHORIZED`.                                                        |
+| 8.2 Cross-user document read   | Pass   | User B could not read User A's document; route returned `Document not found`.                                                   |
+| 8.2 Cross-user document delete | Pass   | User B could not delete User A's document; route returned `Document not found`.                                                 |
+| 8.4 Admin-only routes          | Pass   | Non-owner user created through `upsertUser` with requested admin role was stored as `user` and received `FORBIDDEN`.            |
+| 8.4 Forced admin row           | Pass   | A synthetic non-owner DB row with `role = admin` still received `FORBIDDEN` because admin access also requires `OWNER_OPEN_ID`. |
+| Existing non-owner admin rows  | Pass   | Query returned no non-owner users with `role = admin` after test cleanup.                                                       |
+| Owner/admin override           | Pass   | Configured owner with admin role receives active `firm` access with `adminOverride: true`.                                      |
+| Local auth public exposure     | Pass   | `/api/auth/login` succeeds on `localhost`; same route with non-loopback host returned `403`.                                    |
 
 ## Section 9 - Stripe & Billing
 
-| Item | Status | Evidence |
-|---|---|---|
-| 9.1 Checkout flow | Fail / Blocked | `STRIPE_PRICE_ADVOCATE`, `STRIPE_PRICE_ADVOCATE_FOUNDER`, `STRIPE_PRICE_LITIGATOR`, `STRIPE_PRICE_LITIGATOR_FOUNDER`, `STRIPE_PRICE_FIRM`, and `STRIPE_PRICE_FIRM_FOUNDER` are missing from `.env`. Checkout for Advocate/Litigator returns `Stripe Price ID not configured`. |
-| 9.2 Webhook signature verification | Pass | POST to `/api/stripe/webhook` with invalid signature returned HTTP `400`; no processing occurred. |
-| 9.3 Tier mapping consistency | Partial | Product catalog and webhook mapping use new plan IDs: `free`, `advocate`, `litigator`, `firm`. Cannot fully verify paid tier mapping until real Stripe prices exist and checkout/webhook can run. |
-| 9.4 Cancellation | Not tested | Requires a real Stripe subscription for the new price IDs. |
+| Item                               | Status         | Evidence                                                                                                                                                                                                                                                                      |
+| ---------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9.1 Checkout flow                  | Fail / Blocked | `STRIPE_PRICE_ADVOCATE`, `STRIPE_PRICE_ADVOCATE_FOUNDER`, `STRIPE_PRICE_LITIGATOR`, `STRIPE_PRICE_LITIGATOR_FOUNDER`, `STRIPE_PRICE_FIRM`, and `STRIPE_PRICE_FIRM_FOUNDER` are missing from `.env`. Checkout for Advocate/Litigator returns `Stripe Price ID not configured`. |
+| 9.2 Webhook signature verification | Pass           | POST to `/api/stripe/webhook` with invalid signature returned HTTP `400`; no processing occurred.                                                                                                                                                                             |
+| 9.3 Tier mapping consistency       | Partial        | Product catalog and webhook mapping use new plan IDs: `free`, `advocate`, `litigator`, `firm`. Cannot fully verify paid tier mapping until real Stripe prices exist and checkout/webhook can run.                                                                             |
+| 9.4 Cancellation                   | Not tested     | Requires a real Stripe subscription for the new price IDs.                                                                                                                                                                                                                    |
 
 ## Required Before Public Release
 

@@ -1,5 +1,7 @@
 # Full Audit Run - 2026-06-01
 
+> Historical audit run. Use this as a prior checkpoint only. Re-run current tests and manual release gates before treating the app as release-ready.
+
 Source checklist: `docs/RELEASE_AUDIT_CHECKLIST.md`
 
 Environment: local production server at `http://localhost:3014`
@@ -17,18 +19,18 @@ The product is not release-ready. The biggest blockers are:
 
 ## Commands And Evidence
 
-| Check | Result |
-|---|---|
-| `pnpm exec vite build` | Pass |
-| `pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist` | Pass |
-| `GET /api/trpc/system.health` | Pass, HTTP 200 |
-| Unauthenticated `documents.list` | Pass, HTTP 401 |
-| Local auth on loopback | Pass, HTTP 302 and app session cookie |
-| Local auth with non-loopback Host header | Pass, HTTP 403 |
-| Invalid Stripe webhook signature | Pass, HTTP 400 |
-| Basic text upload through `upload.uploadFile` | Pass, upload returned `success: true` and stored URL |
-| Text-based PDF upload through `upload.uploadFile` | Pass, extracted PDF text stored with `SOURCE_SHA256` anchor |
-| Browser smoke for 13 routes | Pass, no browser console errors |
+| Check                                                                                                             | Result                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `pnpm exec vite build`                                                                                            | Pass                                                        |
+| `pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist` | Pass                                                        |
+| `GET /api/trpc/system.health`                                                                                     | Pass, HTTP 200                                              |
+| Unauthenticated `documents.list`                                                                                  | Pass, HTTP 401                                              |
+| Local auth on loopback                                                                                            | Pass, HTTP 302 and app session cookie                       |
+| Local auth with non-loopback Host header                                                                          | Pass, HTTP 403                                              |
+| Invalid Stripe webhook signature                                                                                  | Pass, HTTP 400                                              |
+| Basic text upload through `upload.uploadFile`                                                                     | Pass, upload returned `success: true` and stored URL        |
+| Text-based PDF upload through `upload.uploadFile`                                                                 | Pass, extracted PDF text stored with `SOURCE_SHA256` anchor |
+| Browser smoke for 13 routes                                                                                       | Pass, no browser console errors                             |
 
 Build warning: client bundle is over 500 kB after minification.
 
@@ -52,20 +54,20 @@ Browsed these routes successfully with no console errors:
 
 ## Section Scores
 
-| Section | Items | Pass | Fail | Partial | Blocked / Not Tested | Score |
-|---|---:|---:|---:|---:|---:|---:|
-| 1. Upload Pipeline | 7 | 3 | 1 | 2 | 1 | 3/7 |
-| 2. Violation Detection | 10 | 0 | 0 | 1 | 9 | 0/10 |
-| 3. Timeline Extraction | 4 | 0 | 0 | 0 | 4 | 0/4 |
-| 4. Contradiction Detection | 3 | 0 | 0 | 0 | 3 | 0/3 |
-| 5. Draft Generation | 6 | 0 | 1 | 0 | 5 | 0/6 |
-| 6. Chat Engine | 6 | 0 | 0 | 0 | 6 | 0/6 |
-| 7. Agent System | 5 | 0 | 0 | 1 | 4 | 0/5 |
-| 8. Auth & Access Control | 4 | 3 | 0 | 1 | 0 | 3/4 |
-| 9. Stripe & Billing | 4 | 1 | 1 | 1 | 1 | 1/4 |
-| 10. Performance | 4 | 0 | 0 | 1 | 3 | 0/4 |
-| 11. UI/UX | 5 | 2 | 0 | 2 | 1 | 2/5 |
-| **Total** | **58** | **9** | **3** | **9** | **37** | **9/58** |
+| Section                    |  Items |  Pass |  Fail | Partial | Blocked / Not Tested |    Score |
+| -------------------------- | -----: | ----: | ----: | ------: | -------------------: | -------: |
+| 1. Upload Pipeline         |      7 |     3 |     1 |       2 |                    1 |      3/7 |
+| 2. Violation Detection     |     10 |     0 |     0 |       1 |                    9 |     0/10 |
+| 3. Timeline Extraction     |      4 |     0 |     0 |       0 |                    4 |      0/4 |
+| 4. Contradiction Detection |      3 |     0 |     0 |       0 |                    3 |      0/3 |
+| 5. Draft Generation        |      6 |     0 |     1 |       0 |                    5 |      0/6 |
+| 6. Chat Engine             |      6 |     0 |     0 |       0 |                    6 |      0/6 |
+| 7. Agent System            |      5 |     0 |     0 |       1 |                    4 |      0/5 |
+| 8. Auth & Access Control   |      4 |     3 |     0 |       1 |                    0 |      3/4 |
+| 9. Stripe & Billing        |      4 |     1 |     1 |       1 |                    1 |      1/4 |
+| 10. Performance            |      4 |     0 |     0 |       1 |                    3 |      0/4 |
+| 11. UI/UX                  |      5 |     2 |     0 |       2 |                    1 |      2/5 |
+| **Total**                  | **58** | **9** | **3** |   **9** |               **37** | **9/58** |
 
 The low score is not because the whole app is broken. It is because the release checklist measures a much more complete product than the current implementation.
 

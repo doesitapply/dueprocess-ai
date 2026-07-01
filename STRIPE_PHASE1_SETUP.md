@@ -1,5 +1,7 @@
 # Stripe Phase 1 Setup: Founding User Pricing
 
+> Archived Phase 1 Stripe setup. The current app uses Free, Advocate, Litigator, Firm, and compute packs from `server/products.ts`.
+
 ## Overview
 
 This document provides step-by-step instructions for creating all Stripe products for the **Founding User (Phase 1)** pricing tier. These prices are locked for the first 200 users and will never increase for them.

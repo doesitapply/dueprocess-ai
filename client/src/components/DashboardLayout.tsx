@@ -21,15 +21,42 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import {
+  Archive,
+  BarChart3,
+  Bot,
+  Brain,
+  Briefcase,
+  FileSearch,
+  FileText,
+  Gavel,
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+  ReceiptText,
+  Scale,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "Command Center", path: "/dashboard" },
+  { icon: Briefcase, label: "Cases", path: "/cases" },
+  { icon: Archive, label: "Corpus", path: "/sector/corpus" },
+  { icon: FileSearch, label: "Evidence Review", path: "/sector/evidence" },
+  { icon: Scale, label: "Legal Analysis", path: "/sector/arsenal" },
+  { icon: ShieldCheck, label: "Violations", path: "/violations" },
+  { icon: ReceiptText, label: "Reports", path: "/reports" },
+  { icon: Bot, label: "Filing Director", path: "/drafts" },
+  { icon: BarChart3, label: "Market Command", path: "/market" },
+  { icon: Brain, label: "AI Swarm", path: "/sector/intel" },
+  { icon: Gavel, label: "Tactical Ops", path: "/sector/tactical" },
+  { icon: FileText, label: "Draft Ops", path: "/sector/offensive" },
+  { icon: Settings, label: "Settings", path: "/settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -53,13 +80,13 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex w-full max-w-md flex-col items-center gap-8 p-8">
           <div className="flex flex-col items-center gap-6">
             <div className="relative group">
               <div className="relative">
@@ -70,7 +97,7 @@ export default function DashboardLayout({
                 />
               </div>
             </div>
-            <div className="text-center space-y-2">
+            <div className="space-y-2 text-center">
               <h1 className="text-2xl font-bold tracking-tight">{APP_TITLE}</h1>
               <p className="text-sm text-muted-foreground">
                 Please sign in to continue
@@ -82,7 +109,7 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full shadow-lg transition-all hover:shadow-xl"
           >
             Sign in
           </Button>
@@ -121,7 +148,11 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const activeMenuItem = menuItems.find(item =>
+    item.path === "/dashboard"
+      ? location === item.path || location === "/"
+      : location === item.path || location.startsWith(`${item.path}/`)
+  );
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -169,9 +200,9 @@ function DashboardLayoutContent({
           disableTransition={isResizing}
         >
           <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 pl-2 group-data-[collapsible=icon]:px-0 transition-all w-full">
+            <div className="flex w-full items-center gap-3 pl-2 transition-all group-data-[collapsible=icon]:px-0">
               {isCollapsed ? (
-                <div className="relative h-8 w-8 shrink-0 group">
+                <div className="group relative h-8 w-8 shrink-0">
                   <img
                     src={APP_LOGO}
                     className="h-8 w-8 rounded-md object-cover ring-1 ring-border"
@@ -179,17 +210,17 @@ function DashboardLayoutContent({
                   />
                   <button
                     onClick={toggleSidebar}
-                    className="absolute inset-0 flex items-center justify-center bg-accent rounded-md ring-1 ring-border opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute inset-0 flex items-center justify-center rounded-md bg-accent opacity-0 ring-1 ring-border transition-opacity group-hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <PanelLeft className="h-4 w-4 text-foreground" />
                   </button>
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3">
                     <img
                       src={APP_LOGO}
-                      className="h-8 w-8 rounded-md object-cover ring-1 ring-border shrink-0"
+                      className="h-8 w-8 shrink-0 rounded-md object-cover ring-1 ring-border"
                       alt="Logo"
                     />
                     <span className="font-semibold tracking-tight truncate">
@@ -198,7 +229,7 @@ function DashboardLayoutContent({
                   </div>
                   <button
                     onClick={toggleSidebar}
-                    className="ml-auto h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                    className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <PanelLeft className="h-4 w-4 text-muted-foreground" />
                   </button>
@@ -210,14 +241,18 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
-                const isActive = location === item.path;
+                const isActive =
+                  item.path === "/dashboard"
+                    ? location === item.path || location === "/"
+                    : location === item.path ||
+                      location.startsWith(`${item.path}/`);
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className="h-10 font-normal transition-all"
                     >
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
@@ -233,17 +268,17 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
+                <button className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:justify-center">
+                  <Avatar className="h-9 w-9 shrink-0 border">
                     <AvatarFallback className="text-xs font-medium">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
+                  <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                    <p className="truncate text-sm font-medium leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    <p className="mt-1.5 truncate text-xs text-muted-foreground">
                       {user?.email || "-"}
                     </p>
                   </div>
@@ -262,7 +297,7 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors hover:bg-primary/20 ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -273,7 +308,7 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">

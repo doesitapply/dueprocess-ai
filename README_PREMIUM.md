@@ -1,5 +1,7 @@
 # DueProcess AI - Litigation Warfare Platform
 
+> Archived planning document. This file contains older premium/per-agent/per-sector positioning and is not the current implementation source of truth. Use `README.md`, `docs/DOCUMENTATION_INDEX.md`, and `server/products.ts` for current product, setup, and pricing.
+
 **16 specialist legal agents. Swarm processing. Pattern recognition. Court-ready output.**
 
 This is not a legal research tool. This is a **multi-agent litigation warfare platform** designed to dismantle qualified immunity, pierce prosecutorial misconduct, and construct federal civil rights claims that survive dismissal.

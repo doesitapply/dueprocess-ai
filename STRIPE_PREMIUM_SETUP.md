@@ -1,5 +1,7 @@
 # Stripe Setup Guide - Premium Pricing Model
 
+> Archived Stripe plan. This file describes the older premium/per-agent/per-sector Stripe setup. The active Stripe variables and tiers are defined in `.env.example` and `server/products.ts`.
+
 ## Overview
 
 This guide walks you through creating all Stripe products for the DueProcess AI premium pricing model.

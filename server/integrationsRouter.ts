@@ -223,6 +223,38 @@ export const integrationsRouter = router({
     }),
 
   /**
+   * Verify case citations in text via CourtListener citation lookup.
+   * CourtListener validates opinion citations only; statutes/rules still need
+   * a separate authority source or human review.
+   */
+  lookupCitations: protectedProcedure
+    .input(z.object({
+      text: z.string().min(1).max(64000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      const connection = await db
+        .select()
+        .from(integrationConnections)
+        .where(
+          and(
+            eq(integrationConnections.userId, ctx.user.id),
+            eq(integrationConnections.providerId, 'courtlistener')
+          )
+        )
+        .limit(1);
+
+      if (!connection.length || !connection[0].apiKey) {
+        throw new Error('CourtListener not connected');
+      }
+
+      await courtListener.authenticate({ apiKey: connection[0].apiKey });
+      return courtListener.lookupCitations(input.text);
+    }),
+
+  /**
    * Get user's connections
    */
   getConnections: protectedProcedure.query(async ({ ctx }) => {
@@ -269,4 +301,3 @@ export const integrationsRouter = router({
       };
     }),
 });
-

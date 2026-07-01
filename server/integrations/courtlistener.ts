@@ -1,5 +1,18 @@
 import { Provider, AuthResult, Item } from './provider';
 
+export type CourtListenerCitationLookup = {
+  citation: string;
+  normalizedCitations: string[];
+  status: number;
+  errorMessage: string;
+  matches: Array<{
+    caseName: string;
+    url: string;
+    court: string;
+    dateFiled: string;
+  }>;
+};
+
 /**
  * CourtListener + RECAP Integration
  * Free legal research API with case law and RECAP docket PDFs
@@ -11,6 +24,7 @@ export class CourtListenerProvider implements Provider {
   
   private apiKey: string | null = null;
   private baseUrl = 'https://www.courtlistener.com/api/rest/v3';
+  private citationLookupBaseUrl = 'https://www.courtlistener.com/api/rest/v4';
 
   async authenticate(credentials: Record<string, string>): Promise<AuthResult> {
     // CourtListener uses API key authentication
@@ -194,6 +208,61 @@ export class CourtListenerProvider implements Provider {
     };
   }
 
+  /**
+   * Verify/resolve case citations in a block of text using CourtListener v4.
+   * This endpoint only verifies court-opinion citations. It does not validate
+   * statutes, rules, canons, law review citations, id., or supra references.
+   */
+  async lookupCitations(text: string): Promise<CourtListenerCitationLookup[]> {
+    if (!this.apiKey) {
+      throw new Error('Not authenticated');
+    }
+
+    const body = new URLSearchParams();
+    body.set('text', text.slice(0, 64000));
+
+    const response = await fetch(`${this.citationLookupBaseUrl}/citation-lookup/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${this.apiKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `Citation lookup failed: ${response.status} ${response.statusText}${detail ? ` - ${detail.slice(0, 240)}` : ''}`
+      );
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    return data.map((result: any) => ({
+      citation: String(result.citation || ''),
+      normalizedCitations: Array.isArray(result.normalized_citations)
+        ? result.normalized_citations.map((value: unknown) => String(value))
+        : [],
+      status: Number(result.status || 0),
+      errorMessage: String(result.error_message || ''),
+      matches: Array.isArray(result.clusters)
+        ? result.clusters.slice(0, 3).map((cluster: any) => ({
+            caseName: String(cluster.case_name || cluster.caseName || ''),
+            url: cluster.absolute_url
+              ? `https://www.courtlistener.com${cluster.absolute_url}`
+              : '',
+            court:
+              typeof cluster.court === 'string'
+                ? cluster.court
+                : String(cluster.court?.short_name || cluster.court?.full_name || ''),
+            dateFiled: String(cluster.date_filed || cluster.dateFiled || ''),
+          }))
+        : [],
+    }));
+  }
+
   // Provider interface methods
   async list(type: 'files' | 'folders', opts?: Record<string, unknown>): Promise<Item[]> {
     // For CourtListener, "list" means search
@@ -248,4 +317,3 @@ export class CourtListenerProvider implements Provider {
 
 // Export singleton instance
 export const courtListener = new CourtListenerProvider();
-

@@ -1,344 +1,232 @@
-# DueProcess AI - Litigation Warfare Platform
+# DueProcess AI
 
-**16 specialist legal agents. Swarm processing. Pattern recognition. Court-ready output.**
+DueProcess AI is a source-bound legal record review platform. It ingests messy case documents, extracts usable text, anchors findings to the record, runs specialized legal agents, applies QC to risky claims, and exports attorney-review-ready reports.
 
-This is not a legal research tool. This is a **multi-agent litigation warfare platform** designed to dismantle qualified immunity, pierce prosecutorial misconduct, and construct federal civil rights claims that survive dismissal.
+The current product is not the older per-agent/per-sector pricing experiment. The active checkout uses platform tiers: `Free`, `Advocate`, `Litigator`, and `Firm`, with optional compute packs.
 
----
+## Current Product Shape
 
-## The Platform
+- Upload legal records into a private Corpus.
+- Extract text from PDFs, DOCX, text, images, audio, and video where supported.
+- Hash uploads for duplicate detection and source integrity.
+- Organize records into workspace cases so one account can compare multiple matters without mixing evidence.
+- Run specialized agents across a document, all documents, or a time window.
+- Store structured findings with source anchors, confidence, severity, legal authorities, missing-record demands, and QC status.
+- Review violations through a dedicated evidence map that ties issues to documents, confidence, QC, missing proof, and timeline context.
+- Route individual issues into the right work product: violation matrix, cause-of-action map, actor matrix, Monell outline, writ packet, discovery demands, source appendix, timeline/gap map, or written-opinion memo.
+- Generate reports only from report-ready structured findings by default.
+- Export saved reports as Markdown, HTML, JSON, PDF, or DOCX where supported.
+- Use Draft Director to turn a report into filing instructions and a court-safe draft plan.
+- Serve a mobile REST API at `/api/mobile/v1` for the Android client.
 
-### 16 Specialized Agents
+## Main Workflows
 
-**Intel Center (Research)**
-- Canon Hunter: Judicial ethics violations
-- Precedent Miner: Case law research
-- Statute Scanner: Federal/state statutory analysis
+### Corpus Intake
 
-**Legal Arsenal (Analysis)**
-- Constitutional Analyst: Constitutional rights violations
-- Criminal Law Specialist: Brady/Giglio/Napue violations
-- Civil Rights Expert: §1983 claim construction
-- Appellate Strategist: Appellate brief strategy
+Users upload source files through the web app or mobile API. The server stores the original file, computes a SHA-256 hash, extracts text, stores extraction diagnostics, and marks the document ready only when it has usable text and source integrity metadata.
 
-**Tactical Ops (Procedural Warfare)**
-- Immunity Piercer: Qualified/absolute immunity destruction
-- Abstention Destroyer: Younger abstention bypass
-- Discovery Tactician: Strategic discovery warfare
+Duplicate uploads are detected by hash and return the existing document metadata instead of silently creating conflicting record copies.
 
-**Evidence Lab (Forensic Analysis)**
-- Pattern Recognition Engine: Cross-case systemic violations
-- Timeline Constructor: Chronological analysis
-- Contradiction Detector: Impeachment evidence
+### Workspace Cases
 
-**Offensive Ops (Litigation Generation)**
-- Motion Drafter: Court-ready TRO/preliminary injunction
-- Complaint Constructor: Federal complaint drafting
-- Viral Content Generator: Public pressure campaigns
+The app supports multiple case lanes inside one workspace. Cases let users assign files to a specific matter, compare readiness across matters, and keep Legal Analysis, Violations, Reports, and Dashboard views pointed at the active case instead of the whole evidence pile.
 
-### Swarm Processing
+The Cases page can suggest a case profile from workspace document filenames. It does not silently create a case; the user must review and apply the suggested title, case number, and jurisdiction before creating the case lane.
 
-Deploy multiple agents simultaneously on the same evidence. Parallel multi-agent analysis that identifies patterns, constructs timelines, detects contradictions, and drafts motions—all at once.
+### Leverage Engine
 
-### Pattern Recognition
+The agent workflow runs one or more specialized legal agents against a selected scope:
 
-Analyze multiple cases to identify systemic violations, Monell policy/custom evidence, and institutional corruption patterns.
+- `all`: all ready documents in the Corpus.
+- `file`: selected document IDs.
+- `time`: a date-focused review across selected records.
 
----
+Agent runs create structured findings, not just freeform chat output. Findings include source anchors, confidence, severity, leverage score, liability vector, remedy path, missing records, legal authorities, and QC state.
 
-## Pricing
+### Violation Review
 
-### Founding 100 Users (6-Month Price Lock)
+The Violations page is the issue-to-evidence map. It ranks findings, groups issue clusters, shows confidence/QC status, displays source support, tracks missing records, and links each finding back to the timeline and evidence crosswalk.
 
-**Per-Agent:** $399/month
-- 1 specialist agent
-- 50 document analyses per month
-- 6-month price lock
+Issue cards expose relevant next actions instead of generic buttons:
 
-**Sector:** $1,499/month
-- 3-4 coordinated agents in one division
-- 200 document analyses per month
-- 6-month price lock
+- Build a cause-of-action map.
+- Build a Monell pattern outline.
+- Build an actor/immunity matrix.
+- Build a mandamus/writ packet.
+- Build a timeline/gap map.
+- Build a source appendix.
+- Demand missing records.
+- Fix proof or rerun QC.
+- Assign the source evidence to a case.
 
-**Pro:** $3,499/month
-- ALL 16 agents
-- Swarm processing
-- 1,000 document analyses per month
-- Priority support
-- API access
-- 6-month price lock
+Low-confidence review is available at `/violations?confidence=low`. The Reports preflight warning links there so weak findings can be fixed before export.
 
-**Enterprise:** $9,999/month
-- UNLIMITED document analyses
-- ALL 16 agents with unlimited swarm
-- White-label options
-- Custom agent training
-- 24/7 dedicated support
-- Team collaboration
-- 6-month price lock
+### Report Generation
 
-### After 100 Users (Phase 2 Pricing)
+Reports are deliberately conservative. Default report generation uses QC-cleared/report-ready structured findings and excludes legacy/freeform agent output unless an explicit unsafe-reference override is used. This keeps exported work product from turning unsupported allegations into asserted facts.
 
-- Per-Agent: $499/month (+25%)
-- Sector: $1,999/month (+33%)
-- Pro: $4,999/month (+43%)
-- Enterprise: $14,999/month (+50%)
+Report setup has two layers:
 
-**Founding 100 users receive 30-day notice before price lock expires and option to lock in annual rate.**
+1. Smart packet families: user-facing report goals such as violation matrix, cause-of-action map, actor matrix, Monell outline, mandamus/writ, timeline/gap map, discovery demand packet, source appendix, written-opinion memo, and general fallback.
+2. Backend templates: the structured report generators that produce the actual saved report.
 
----
+Backend report templates currently include:
 
-## Value Comparison
+- `executive_summary`
+- `court_packet`
+- `case_strategy`
+- `written_opinion`
+- `evidence_chronology`
+- `immunity_relief`
+- `mandamus_writ`
+- `discovery_demands`
+- `source_appendix`
 
-### vs. Human Attorneys
+Reports can be opened with targeted setup parameters, for example:
 
-| Service | Cost | DueProcess AI | Savings |
-| ------- | ---- | ------------- | ------- |
-| Specialist attorney (1 hour) | $300-500 | $399/month (unlimited) | 98%+ |
-| Civil rights case | $50,000-100,000 | $3,499/month | 58-79% |
-| Litigation team (annual) | $300,000-1,000,000 | $41,988/year | 95%+ |
+```text
+/reports?template=case_strategy&path=monell_outline&finding=900095#build
+```
 
-### vs. Legal Tech Platforms
+That lets the Violations page send a specific issue into the correct report family with the finding preselected.
 
-| Platform | Price | Capability |
-| -------- | ----- | ---------- |
-| Paxton AI | $159/month | 1 generalist AI |
-| Casetext | $110/month | Legal research only |
-| LexisNexis | $200-270/month | Research database |
-| **DueProcess AI** | **$3,499/month** | **16 specialists + swarm** |
+### Draft Director
 
-**You are getting 16 specialist attorneys for less than 10 hours of human attorney time per month.**
+Draft Director is the filing-command layer. It helps define what the report is supposed to become, what it responds to, what relief is requested, what issues control the draft, and what caption/court metadata is missing.
 
----
+Draft outputs are intended for attorney or human review. They are not a substitute for legal advice, current-law verification, local-rule review, service review, deadline review, or final filing judgment.
+
+### Mobile API
+
+The Android app integrates with the backend through `/api/mobile/v1`. Mobile login requires `MOBILE_AUTH_ACCESS_KEY` or `MOBILE_ADMIN_ACCESS_KEY` outside local loopback development. Uploads use an issued upload URL, then the same backend extraction and readiness pipeline as the web app.
+
+## Web Routes
+
+- `/` - home
+- `/pricing` - platform pricing
+- `/payments` - billing/payment flows
+- `/settings` - system and account settings
+- `/cases` - multi-case workspace, comparison, and evidence assignment
+- `/reports` - report generation and saved reports
+- `/drafts` - Draft Director and filing-command workflow
+- `/violations` - findings/violations view
+- `/market` - market/customer command view
+- `/dashboard` - main workspace dashboard
+- `/process/:id` - document processing view
+- `/sector/tactical`
+- `/sector/intel`
+- `/sector/arsenal`
+- `/sector/evidence`
+- `/sector/offensive`
+- `/sector/integrations`
+- `/sector/corpus`
+
+## Pricing Model In Code
+
+The active pricing source is `server/products.ts`.
+
+| Tier      |     Standard |      Founder | Core access                                            |
+| --------- | -----------: | -----------: | ------------------------------------------------------ |
+| Free      |        $0/mo |          n/a | 1 case, limited uploads/pages/chat, no agent analysis  |
+| Advocate  |       $79/mo |       $49/mo | 2 cases, evidence agents, drafting, PDF export         |
+| Litigator |      $249/mo |      $149/mo | 10 cases, all 16 agents, swarm mode, precedent search  |
+| Firm      | $199/mo base | $149/mo base | unlimited cases, metered usage, API access, team seats |
+
+Compute packs:
+
+| Pack           | Price | Included capacity           |
+| -------------- | ----: | --------------------------- |
+| Case Burst     |   $19 | 500 pages, 25 agent runs    |
+| Trial Prep     |   $49 | 2,000 pages, 100 agent runs |
+| Full Discovery |   $99 | 5,000 pages, 250 agent runs |
+
+Stripe price IDs are configured through environment variables, not hard-coded real IDs.
 
 ## Tech Stack
 
-### Frontend
-- React 19 with TypeScript
-- Tailwind CSS for styling
-- tRPC for type-safe API calls
-- Vite for build tooling
+- React 19, TypeScript, Vite, Tailwind CSS, shadcn/Radix UI.
+- Express and tRPC for the web API.
+- Dedicated Express REST router for mobile at `/api/mobile/v1`.
+- Drizzle ORM with MySQL/TiDB-compatible schema.
+- Stripe Checkout, subscriptions, webhooks, and compute packs.
+- S3-compatible storage abstraction for uploaded files.
+- LLM calls through the server core provider wrapper.
+- Vitest for unit and integration tests.
 
-### Backend
-- Node.js/Express
-- tRPC server
-- MySQL/TiDB database
-- Manus OAuth authentication
+## Safety Defaults
 
-### AI Infrastructure
-- 16 specialized agent configurations
-- Swarm processing orchestration
-- Pattern recognition across cases
-- Multi-document analysis pipeline
+- Documents are analysis-ready only after text extraction and source integrity checks.
+- Reports default to QC-cleared/report-ready structured findings.
+- Missing records are treated as demands/gaps, not proven misconduct.
+- Low-confidence findings are routed to review before court-facing export.
+- Admin-only overrides can include blocked or legacy/freeform material, but that path is intentionally explicit.
+- Court-facing PDF/DOCX output is still draft work product and requires human legal review.
 
-### Deployment
-- Vercel (frontend + serverless functions)
-- TiDB Cloud (database)
-- S3 (document storage)
+## Environment
 
----
+Copy `.env.example` to `.env` and fill the values required for the workflow you are testing.
 
-## Features
+Required for normal local app work:
 
-### Document Analysis
-Upload evidence, depositions, police reports, court filings—any legal document. Each agent analyzes from their specialized perspective.
+```bash
+DATABASE_URL=
+JWT_SECRET=
+OWNER_OPEN_ID=
+OWNER_EMAIL=
+OWNER_NAME=
+OPENAI_API_KEY=
+PORT=3000
+```
 
-### Swarm Processing
-Deploy multiple agents simultaneously. Get pattern analysis, timeline construction, contradiction detection, and motion drafting in parallel.
+Required for mobile login outside local loopback:
 
-### Pattern Recognition
-Analyze multiple cases to identify systemic violations, Monell evidence, and institutional corruption.
+```bash
+MOBILE_AUTH_ACCESS_KEY=
+MOBILE_ADMIN_ACCESS_KEY=
+```
 
-### Court-Ready Output
-All agent output includes proper legal citations (Bluebook format), element-by-element analysis, and court-ready language.
+Required for billing:
 
-### Workspace Mode
-Organize cases, manage documents, track agent analyses, and collaborate with team members.
-
-### API Access (Pro/Enterprise)
-Programmatic access to all agents for custom integrations and automation.
-
----
-
-## Use Cases
-
-### Pro Se Litigants
-Fight qualified immunity with 16 specialist agents backing your federal civil rights case.
-
-### Civil Rights Attorneys
-Force multiply your litigation team with AI-powered pattern recognition and swarm analysis.
-
-### Public Defenders
-Identify Brady violations, prosecutorial misconduct, and evidence fabrication at scale.
-
-### Activists & Journalists
-Document systemic corruption with cross-case pattern analysis and timeline construction.
-
-### Legal Aid Organizations
-Provide powerful litigation tools to underserved communities.
-
----
-
-## Getting Started
-
-### 1. Enroll in Founding 100
-
-Visit [dueprocess.ai](https://dueprocess.ai) and select your tier:
-- Per-Agent: $399/month
-- Sector: $1,499/month
-- Pro: $3,499/month
-- Enterprise: $9,999/month
-
-**Only 100 slots available at Founding 100 pricing.**
-
-### 2. Upload Your Evidence
-
-Upload documents, depositions, police reports, court filings—anything relevant to your case.
-
-### 3. Deploy Agents
-
-Select which agents to deploy on your evidence. Use swarm processing for multi-agent parallel analysis.
-
-### 4. Review Output
-
-Each agent provides specialized analysis with legal citations, element breakdowns, and strategic recommendations.
-
-### 5. Generate Litigation Documents
-
-Use Motion Drafter and Complaint Constructor to generate court-ready TROs, preliminary injunctions, and federal complaints.
-
----
+```bash
+STRIPE_SECRET_KEY=
+VITE_STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_ADVOCATE=
+STRIPE_PRICE_ADVOCATE_FOUNDER=
+STRIPE_PRICE_LITIGATOR=
+STRIPE_PRICE_LITIGATOR_FOUNDER=
+STRIPE_PRICE_FIRM=
+STRIPE_PRICE_FIRM_FOUNDER=
+STRIPE_PRICE_CASE_BURST=
+STRIPE_PRICE_TRIAL_PREP=
+STRIPE_PRICE_FULL_DISCOVERY=
+```
 
 ## Development
 
-### Prerequisites
-
-- Node.js 22+
-- MySQL/TiDB database
-- Manus account (for OAuth)
-- Stripe account (for payments)
-
-### Installation
-
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/dueprocess-ai.git
-cd dueprocess-ai
-
-# Install dependencies
 pnpm install
-
-# Set up environment variables
 cp .env.example .env
-# Edit .env with your credentials
-
-# Run database migrations
-pnpm db:migrate
-
-# Start development server
+pnpm db:push
 pnpm dev
 ```
 
-### Environment Variables
-
-```
-# Database
-DATABASE_URL=mysql://user:pass@host:port/database
-
-# Manus OAuth
-MANUS_CLIENT_ID=your_client_id
-MANUS_CLIENT_SECRET=your_client_secret
-
-# Stripe
-STRIPE_SECRET_KEY=your_stripe_secret
-STRIPE_WEBHOOK_SECRET=your_webhook_secret
-
-# OpenAI (for agents)
-OPENAI_API_KEY=your_openai_key
-```
-
-### Deployment
+Useful checks:
 
 ```bash
-# Build for production
+pnpm check
+pnpm check:server
+pnpm test
 pnpm build
-
-# Deploy to Vercel
-vercel deploy --prod
 ```
 
----
+## Documentation Map
 
-## Roadmap
+- `docs/DOCUMENTATION_INDEX.md` - current documentation map and stale-doc status.
+- `docs/TECHNICAL_SPECIFICATION.md` - architecture, data model, APIs, and release gates.
+- `docs/USER_GUIDE.md` - user-facing workflow guide.
+- `docs/MARKET_CUSTOMER_BASES.md` - current market and customer positioning.
+- `docs/RELEASE_AUDIT_CHECKLIST.md` - full manual release checklist.
+- `docs/AUTH_BILLING_RELEASE_GATE_REPORT.md` - last documented auth/billing gate result.
 
-### Phase 1: Founding 100 (Current)
-- ✅ 16 specialized agents
-- ✅ Swarm processing
-- ✅ Pattern recognition
-- ✅ Court-ready output
-- 🚧 Workspace mode (in progress)
-- 🚧 Multi-document workflows (in progress)
-
-### Phase 2: Public Launch (After 100 Users)
-- API access for Pro/Enterprise
-- Team collaboration features
-- Advanced analytics dashboard
-- Custom agent training (Enterprise)
-- White-label options (Enterprise)
-
-### Phase 3: Market Dominance
-- Mobile app (iOS/Android)
-- Courtroom presentation mode
-- Live deposition analysis
-- Appellate brief generation
-- Class action coordination tools
-
----
-
-## Legal Disclaimer
-
-DueProcess AI provides legal research, analysis, and document drafting tools. It is **not a substitute for a licensed attorney** and does not provide legal advice.
-
-All agent output should be reviewed by a human before filing in court. You are responsible for verifying accuracy and compliance with local rules.
-
-By using DueProcess AI, you acknowledge that:
-- This is a research and analysis tool, not legal advice
-- You will review all output before using it in court
-- You are responsible for compliance with all applicable laws and rules
-- DueProcess AI is not liable for any outcomes resulting from use of the platform
-
-**Always consult with a licensed attorney before filing anything in court.**
-
----
-
-## Support
-
-### Documentation
-Full documentation at [docs.dueprocess.ai](https://docs.dueprocess.ai)
-
-### Email Support
-[support@dueprocess.ai](mailto:support@dueprocess.ai)
-
-### Priority Support
-Founding 100 users get priority support with 24-hour response time.
-
-### Enterprise Support
-Enterprise tier includes 24/7 dedicated support with direct access to engineering team.
-
----
-
-## License
-
-Proprietary. All rights reserved.
-
----
-
-## Contact
-
-**Website:** [dueprocess.ai](https://dueprocess.ai)  
-**Email:** [support@dueprocess.ai](mailto:support@dueprocess.ai)  
-**GitHub:** [github.com/yourusername/dueprocess-ai](https://github.com/yourusername/dueprocess-ai)
-
----
-
-**Enlistment is now open. 100 slots. 6-month price lock. Go.**
+Historical pricing and launch documents remain in the repository for context, but the current implementation source of truth is `server/products.ts`.

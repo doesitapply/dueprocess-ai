@@ -1,5 +1,7 @@
 # AI-Powered Legal Warfare: A New Paradigm for Civil Rights Litigation
 
+> Strategic draft. This whitepaper preserves earlier positioning language and may mention older agent counts or sector framing. For current implementation details, use `README.md`, `docs/TECHNICAL_SPECIFICATION.md`, and `server/agentConfig.ts`.
+
 **Defeating Qualified Immunity Through Pattern Recognition and Computational Legal Analysis**
 
 **Version:** 1.0  
@@ -10,7 +12,7 @@
 
 ## Abstract
 
-This whitepaper presents a novel methodology for civil rights litigation that combines artificial intelligence, pattern recognition, and computational legal analysis to overcome systemic barriers including qualified immunity, federal court abstention, and resource asymmetry. We demonstrate that AI agents can identify immunity exceptions, locate controlling precedent, and construct pattern evidence with greater efficiency and comprehensiveness than traditional legal research methods. The DueProcess AI platform implements this methodology through fifteen specialized agents organized across six tactical sectors, providing pro se litigants and civil rights practitioners with tools previously available only to well-resourced institutional litigators.
+This whitepaper presents a novel methodology for civil rights litigation that combines artificial intelligence, pattern recognition, and computational legal analysis to overcome systemic barriers including qualified immunity, federal court abstention, and resource asymmetry. We demonstrate that AI agents can identify immunity exceptions, locate controlling precedent, and construct pattern evidence with greater efficiency and comprehensiveness than traditional legal research methods. The DueProcess AI platform implements this methodology through sixteen specialized agents organized across five legal-analysis divisions plus the Corpus record layer, providing pro se litigants and civil rights practitioners with tools previously available only to well-resourced institutional litigators.
 
 ---
 
@@ -215,7 +217,7 @@ Collaborative features would also enable legal aid organizations and civil right
 
 AI-powered legal warfare represents a paradigm shift in civil rights litigation. Traditional approaches rely on expensive legal research tools, extensive attorney time, and institutional resources that favor government defendants. AI agents can analyze evidence, identify precedent, and construct legal arguments with greater efficiency and comprehensiveness than manual methods. Pattern recognition transforms isolated incidents into evidence of systematic violations that pierce qualified immunity and establish municipal liability. Computational discovery warfare enables targeted evidence extraction that overcomes privilege claims and defendant resistance.
 
-DueProcess AI implements this methodology through fifteen specialized agents organized across six tactical sectors. The platform provides pro se litigants and civil rights practitioners with tools previously available only to well-resourced institutional litigators. By democratizing access to sophisticated legal analysis, the platform advances the goal of equal justice under law. The system's emphasis on free legal sources, transparent reasoning, and verifiable citations ensures that outputs meet professional standards while remaining accessible to users without legal training.
+DueProcess AI implements this methodology through sixteen specialized agents organized across five legal-analysis divisions plus the Corpus record layer. The platform provides pro se litigants and civil rights practitioners with tools previously available only to well-resourced institutional litigators. By democratizing access to sophisticated legal analysis, the platform advances the goal of equal justice under law. The system's emphasis on free legal sources, transparent reasoning, and verifiable citations ensures that outputs meet professional standards while remaining accessible to users without legal training.
 
 The future of civil rights enforcement lies in combining human judgment with computational power. AI cannot replace the strategic thinking, ethical judgment, and courtroom advocacy of trained attorneys. However, AI can augment human capabilities by processing volumes of evidence, identifying patterns, and locating precedent that would be impractical to find manually. This human-AI collaboration enables more effective representation, better-informed decision-making, and ultimately more successful vindication of constitutional rights.
 
